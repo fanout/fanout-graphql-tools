@@ -1,0 +1,24 @@
+{
+  "name": "fanout-apollo-tools",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/src",
+  "author": "",
+  "license": "ISC",
+  "prettier": {
+    "trailingComma": "all"
+  },
+  "scripts": {
+    "prettier": "prettier '{package.json,tsconfig.json,src/**/*.{ts,tsx}}' --write",
+    "start": "ts-node src/FanoutGraphqlExpressServer",
+    "test": "ts-node src/test/unit",
+    "tsc": "tsc -p tsconfig.json",
+    "tslint": "tslint -c tslint.json 'src/**/*.ts'"
+  },
+  "devDependencies": {
+    "lerna": "^3.14.1",
+    "prettier": "^1.17.1",
+    "ts-node": "^8.2.0",
+    "typescript": "^3.5.1"
+  }
+}

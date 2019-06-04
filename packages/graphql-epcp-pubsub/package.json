@@ -1,0 +1,23 @@
+{
+  "name": "graphql-epcp-pubsub",
+  "version": "1.0.0",
+  "main": "dist/index",
+  "types": "dist/index",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run clean && npm run compile",
+    "clean": "rm -rf ./dist",
+    "compile": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@types/graphql": "^14.2.0",
+    "apollo-server": "^2.6.1",
+    "grip": "^1.3.0",
+    "pubcontrol": "^1.2.1"
+  },
+  "devDependencies": {
+    "typescript": "~3.4.5"
+  }
+}

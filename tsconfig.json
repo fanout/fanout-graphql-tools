@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "baseUrl": "./packages",
+    "paths": {
+      "graphql-epcp-pubsub": ["graphql-epcp-pubsub/src"],
+      "graphql-ws": ["graphql-ws/src"],
+      "subscriptions-transport-ws-over-http": ["subscriptions-transport-ws-over-http/src"],
+    }
+  }
+}

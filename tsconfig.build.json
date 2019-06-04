@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "allowSyntheticDefaultImports": true,
+    "outDir": "dist",
+    "target": "es5",
+    "lib": [
+      "es6",
+      "dom",
+      "es2015.symbol",
+      "es2015.symbol.wellknown",
+      "esnext",
+      "esnext.asynciterable"
+    ],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "pretty": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "forceConsistentCasingInFileNames": true,
+    "strictNullChecks": true,
+    "typeRoots": ["./src/@types", "./node_modules/@types"],
+    "downlevelIteration": true,
+    "baseUrl": ".",
+    "paths": {
+      "*": ["./src/@types/*"]
+    },
+    "declaration": true
+  },
+  "exclude": ["dist/**", "node_modules/**"],
+  "references": []
+}

@@ -1,19 +1,22 @@
-import { EventEmitter } from "events";
 import * as express from "express";
 import * as http from "http";
-import { IGraphqlWsStartEventPayload } from "./GraphqlWebSocketOverHttpConnectionListener";
+import { ISimpleTable } from "../simple-table/SimpleTable";
+import { IGraphqlSubscription } from "./GraphqlSubscription";
+import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 
 interface IGraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstallerOptions {
-  /** Given a subscription operation, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-  getGripChannel(subscriptionOperation: IGraphqlWsStartEventPayload): string;
+  /** table to store information about each Graphql Subscription */
+  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
+  /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
+  getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
 }
 
 /**
  * Create a function that will patch an http.Server instance such that it responds to incoming graphql-ws over WebSocket-Over-Http requests in a way that will allow all GraphQL Subscriptions to initiate.
  * If the incoming request is not of this specific kind, it will be handled however the http.Server normally would.
  */
-export default (
+export const GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller = (
   options: IGraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstallerOptions,
 ) => (httpServer: http.Server) => {
   interceptRequests(httpServer, (request, response, next) => {

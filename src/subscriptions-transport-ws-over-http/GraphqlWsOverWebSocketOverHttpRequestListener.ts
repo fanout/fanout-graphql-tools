@@ -1,11 +1,15 @@
 import * as express from "express";
 import * as http from "http";
-import { IGraphqlWsStartEventPayload } from "./GraphqlWebSocketOverHttpConnectionListener";
+import { ISimpleTable } from "../simple-table/SimpleTable";
+import { IGraphqlSubscription } from "./GraphqlSubscription";
+import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 
 interface IGraphqlWsOverWebSocketOverHttpRequestListenerOptions {
-  /** Given a subscription operation, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-  getGripChannel(subscriptionOperation: IGraphqlWsStartEventPayload): string;
+  /** table to store information about each Graphql Subscription */
+  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
+  /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
+  getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
 }
 
 /**
@@ -13,7 +17,7 @@ interface IGraphqlWsOverWebSocketOverHttpRequestListenerOptions {
  * Given an http RequestListener, return a new one that will respond to incoming WebSocket-Over-Http requests that are graphql-ws
  * Subscriptions and accept the subscriptions.
  */
-export default (
+export const GraphqlWsOverWebSocketOverHttpRequestListener = (
   originalRequestListener: http.RequestListener,
   options: IGraphqlWsOverWebSocketOverHttpRequestListenerOptions,
 ): http.RequestListener => (req, res) => {

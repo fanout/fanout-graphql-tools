@@ -4,7 +4,7 @@ import * as grip from "grip";
 import {
   IConnectionListener,
   IWebSocketOverHTTPConnectionInfo,
-} from "./GraphqlWebSocketOverHttpConnectionListener";
+} from "../subscriptions-transport-ws-over-http/GraphqlWebSocketOverHttpConnectionListener";
 
 type AsyncRequestHandler = (
   req: express.Request,

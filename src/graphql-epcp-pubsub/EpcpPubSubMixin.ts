@@ -57,13 +57,13 @@ interface IEpcpPubSubMixinOptions {
   /** Given a PubSubEngine publish invocation, return instructions for what to publish to a GRIP server via EPCP */
   epcpPublishForPubSubEnginePublish(
     publish: IPubSubEnginePublish,
-  ): IEpcpPublish[];
+  ): Promise<IEpcpPublish[]>;
 }
 
 /**
  * Create a graphql PubSubEngine that wraps another one, but also publishes via EPCP to a GRIP server
  */
-export default (options: IEpcpPubSubMixinOptions) => (
+export const EpcpPubSubMixin = (options: IEpcpPubSubMixinOptions) => (
   pubsub: PubSubEngine,
 ): PubSubEngine => {
   const subscriptionType = options.schema.getSubscriptionType();
@@ -81,7 +81,7 @@ export default (options: IEpcpPubSubMixinOptions) => (
     unsubscribe: pubsub.unsubscribe,
     async publish(triggerName: string, payload: any) {
       await pubsub.publish(triggerName, payload);
-      const epcpPublishes = options.epcpPublishForPubSubEnginePublish({
+      const epcpPublishes = await options.epcpPublishForPubSubEnginePublish({
         payload,
         triggerName,
       });
@@ -95,11 +95,7 @@ export default (options: IEpcpPubSubMixinOptions) => (
               ),
               (success, error, context) => {
                 console.log(
-                  `gripPubControl callback channel=${
-                    epcpPublish.channel
-                  } success=${success} error=${error} context=${context} message=${
-                    epcpPublish.message
-                  }`,
+                  `gripPubControl callback channel=${epcpPublish.channel} success=${success} error=${error} context=${context} message=${epcpPublish.message}`,
                 );
                 if (success) {
                   return resolve(context);

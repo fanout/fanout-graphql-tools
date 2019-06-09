@@ -1,5 +1,7 @@
 /** interface of stored record of a GraphqlSubscription */
 export interface IGraphqlSubscription {
+  /** unique identifier for the client connection that issued this subscription. A connection can create many subscriptions */
+  connectionId: string;
   /** unique identifier for the subscription */
   id: string;
   /** Provided by the subscribing client in graphql-ws 'GQL_START' message. Must be sent in each published 'GQL_DATA' message */

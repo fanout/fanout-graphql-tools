@@ -9,6 +9,8 @@ interface IQueryById {
  * As much as possible, it tries to be a subset of @pulumi/cloud.Table
  */
 export interface ISimpleTable<Entity> {
+  /** delete a single entity by id */
+  delete(query: IQueryById): Promise<void>;
   /** Get a single entity by id */
   get(query: IQueryById): Promise<Entity>;
   /** Add a new entity */
@@ -45,6 +47,9 @@ export const MapSimpleTable = <Entity extends IHasId>(
   }
   // tslint:enable:completed-docs
   return {
+    async delete(query: IQueryById) {
+      map.delete(query.id);
+    },
     async get(query: IQueryById) {
       const got = map.get(query.id);
       if (!got) {
@@ -57,4 +62,17 @@ export const MapSimpleTable = <Entity extends IHasId>(
     },
     scan,
   };
+};
+
+/** Return items in an ISimpleTable that match the provided filter function */
+export const filterTable = async <ItemType extends object>(
+  table: ISimpleTable<ItemType>,
+  itemFilter: (item: ItemType) => boolean,
+): Promise<ItemType[]> => {
+  const filteredItems: ItemType[] = [];
+  await table.scan(async items => {
+    filteredItems.push(...items.filter(itemFilter));
+    return true;
+  });
+  return filteredItems;
 };

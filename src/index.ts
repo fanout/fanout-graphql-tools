@@ -16,3 +16,4 @@ export * from "./subscriptions-transport-ws-over-http/GraphqlWebSocketOverHttpCo
 export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpRequestListener";
 export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller";
+export * from "./subscriptions-transport-ws-over-http/GraphqlSubscription";

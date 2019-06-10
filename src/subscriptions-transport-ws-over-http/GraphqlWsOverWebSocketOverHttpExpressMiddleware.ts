@@ -120,6 +120,11 @@ const composeMessageHandlers = (
 interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
   /** table to store information about each Graphql Subscription */
   subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
+  /** WebSocket-Over-HTTP options */
+  webSocketOverHttp?: {
+    /** how often to ask ws-over-http gateway to make keepalive requests */
+    keepAliveIntervalSeconds?: number;
+  };
   /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
   getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
   /** Called when a new subscrpition connection is made */
@@ -140,6 +145,11 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
       const graphqlWsConnectionListener = GraphqlWebSocketOverHttpConnectionListener(
         {
           connection,
+          getMessageResponse: AcceptAllGraphqlSubscriptionsMessageHandler(),
+          webSocketOverHttp: {
+            keepAliveIntervalSeconds: 120,
+            ...options.webSocketOverHttp,
+          },
           async getGripChannel(graphqlWsMessage) {
             const startMessage: IGraphqlWsStartMessage = isGraphqlWsStartMessage(
               graphqlWsMessage,
@@ -190,7 +200,6 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
             const gripChannel = options.getGripChannel(startMessage);
             return gripChannel;
           },
-          getMessageResponse: AcceptAllGraphqlSubscriptionsMessageHandler(),
         },
       );
       const { subscriptionStorage } = options;

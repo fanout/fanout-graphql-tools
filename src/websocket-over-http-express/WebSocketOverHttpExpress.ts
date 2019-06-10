@@ -58,11 +58,11 @@ export default (
           options.gripPrefix,
         );
         if (!events.length) {
-          return res
-            .status(400)
-            .end(
-              "Failed to parse any events from application/websocket-events",
-            );
+          // No events. This may be a ws-over-http KeepAlive request.
+          console.debug(
+            "WebSocketOverHttpExpress got WebSocket-Over-Http request with zero events. May be keepalive.",
+            new Date(Date.now()),
+          );
         }
         if (!connectionId) {
           throw new Error(`Expected connection-id header but none is present`);

@@ -16,6 +16,8 @@
   "scripts": {
     "build": "npm run tsc",
     "prettier": "prettier '{package.json,tsconfig.json,src/**/*.{ts,tsx}}' --write",
+    "prettier:check": "prettier '{package.json,tsconfig.json,src/**/*.{ts,tsx}}' --check",
+    "prepublishOnly": "npm run prettier:check && npm run tslint && npm run build",
     "start": "ts-node src/FanoutGraphqlExpressServer",
     "test": "ts-node src/test/unit",
     "tsc": "tsc -p tsconfig.json",

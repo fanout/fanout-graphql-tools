@@ -5,9 +5,7 @@ import * as grip from "grip";
 
 interface IOnOpenResponse {
   /** response headers */
-  headers: {
-    [key: string]: string;
-  };
+  headers: Record<string, string>;
 }
 
 /**
@@ -111,6 +109,11 @@ export const isGraphqlWsStopMessage = (o: any): o is IGraphqlWsStopMessage => {
 export interface IGraphqlWebSocketOverHttpConnectionListenerOptions {
   /** Info about the WebSocket-Over-HTTP Connection */
   connection: IWebSocketOverHTTPConnectionInfo;
+  /** WebSocket-Over-HTTP options */
+  webSocketOverHttp?: {
+    /** how often to ask ws-over-http gateway to make keepalive requests */
+    keepAliveIntervalSeconds?: number;
+  };
   /** Handle a websocket message and optionally return a response */
   getMessageResponse(message: string): void | string | Promise<string | void>;
   /**
@@ -122,8 +125,8 @@ export interface IGraphqlWebSocketOverHttpConnectionListenerOptions {
 }
 
 /**
- * Connection Listener that tries to mock out a basic graphql-ws.
- * It's also grip and WebSocket-Over-HTTP aware.
+ * GraphqlWebSocketOverHttpConnectionListener
+ * WebSocket-Over-HTTP Connection Listener that tries to mock out a basic graphql-ws.
  */
 export default (
   options: IGraphqlWebSocketOverHttpConnectionListenerOptions,
@@ -153,8 +156,17 @@ export default (
       return options.getMessageResponse(message);
     },
     async onOpen() {
-      const headers = {
-        "sec-websocket-protocol": "graphql-ws",
+      const webSocketOverHttpOptions = options.webSocketOverHttp;
+      const keepAliveIntervalSeconds =
+        webSocketOverHttpOptions &&
+        webSocketOverHttpOptions.keepAliveIntervalSeconds;
+      const headers: Record<string, string> = {
+        ...(options.connection.protocol
+          ? { "sec-websocket-protocol": options.connection.protocol }
+          : {}),
+        ...(keepAliveIntervalSeconds && keepAliveIntervalSeconds < Infinity
+          ? { "Keep-Alive-Interval": String(keepAliveIntervalSeconds) }
+          : {}),
       };
       return { headers };
     },

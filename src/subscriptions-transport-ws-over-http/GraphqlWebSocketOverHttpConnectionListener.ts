@@ -60,15 +60,6 @@ export interface IWebSocketOverHTTPConnectionInfo {
   protocol?: string;
 }
 
-export interface IGraphqlWebSocketOverHttpConnectionListenerOptions {
-  /** Info about the WebSocket-Over-HTTP Connection */
-  connection: IWebSocketOverHTTPConnectionInfo;
-  /** Handle a websocket message and optionally return a response */
-  getMessageResponse(message: string): void | string | Promise<string | void>;
-  /** Given a subscription operation, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-  getGripChannel(subscriptionOperation: IGraphqlWsStartMessage): string;
-}
-
 /** interface for payload that comes up in a graphql-ws start event */
 export interface IGraphqlWsStartEventPayload {
   /** graphql query operationName. Could be user-provided input */
@@ -104,6 +95,32 @@ export const isGraphqlWsStartMessage = (
   );
 };
 
+/** https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md#gql_stop */
+export interface IGraphqlWsStopMessage {
+  /** Subscription Operation ID */
+  id: string;
+  /** Message type. Indicates that this is a start message */
+  type: "stop";
+}
+
+/** Return whether the provided value matches IGraphqlWsStopMessage  */
+export const isGraphqlWsStopMessage = (o: any): o is IGraphqlWsStopMessage => {
+  return typeof o === "object" && typeof o.id === "string" && o.type === "stop";
+};
+
+export interface IGraphqlWebSocketOverHttpConnectionListenerOptions {
+  /** Info about the WebSocket-Over-HTTP Connection */
+  connection: IWebSocketOverHTTPConnectionInfo;
+  /** Handle a websocket message and optionally return a response */
+  getMessageResponse(message: string): void | string | Promise<string | void>;
+  /**
+   * Given a subscription operation, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates
+   */
+  getGripChannel(
+    subscriptionOperation: IGraphqlWsStartMessage | IGraphqlWsStopMessage,
+  ): Promise<string>;
+}
+
 /**
  * Connection Listener that tries to mock out a basic graphql-ws.
  * It's also grip and WebSocket-Over-HTTP aware.
@@ -115,12 +132,22 @@ export default (
     async onMessage(message) {
       const graphqlWsEvent = JSON.parse(message);
       if (isGraphqlWsStartMessage(graphqlWsEvent)) {
-        const gripChannel = options.getGripChannel(graphqlWsEvent);
+        const gripChannel = await options.getGripChannel(graphqlWsEvent);
         if (gripChannel) {
           console.debug(
             `GraphqlWebSocketOverHttpConnectionListener requesting grip subscribe to channel ${gripChannel}`,
           );
           options.connection.webSocketContext.subscribe(gripChannel);
+        }
+      } else if (isGraphqlWsStopMessage(graphqlWsEvent)) {
+        const gripChannel: string = await options.getGripChannel(
+          graphqlWsEvent,
+        );
+        if (gripChannel) {
+          console.debug(
+            `GraphqlWebSocketOverHttpConnectionListener unsubscribing from grip-channel ${gripChannel}`,
+          );
+          options.connection.webSocketContext.unsubscribe(gripChannel);
         }
       }
       return options.getMessageResponse(message);

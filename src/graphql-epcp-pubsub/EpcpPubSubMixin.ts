@@ -111,6 +111,6 @@ export const EpcpPubSubMixin = (options: IEpcpPubSubMixinOptions) => (
 };
 
 /** TypeScript helper for exhaustive switches https://www.typescriptlang.org/docs/handbook/advanced-types.html  */
-function assertNever(x: never): never {
+export function assertNever(x: never): never {
   throw new Error("Unexpected object: " + x);
 }

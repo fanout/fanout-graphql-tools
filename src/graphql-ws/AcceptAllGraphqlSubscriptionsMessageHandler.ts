@@ -1,6 +1,8 @@
 export interface IGraphqlSubscriptionsMessageHandlerOptions {
   /** Called with graphql-ws start event. Return messages to respond with */
   onStart?(startEvent: object): void | string;
+  /** Called with graphql-ws stop event. */
+  onStop?(stopEvent: object): void;
 }
 
 /**
@@ -22,6 +24,9 @@ export default (opts: IGraphqlSubscriptionsMessageHandlerOptions = {}) => (
       }
       break;
     case "stop":
+      if (opts.onStop) {
+        opts.onStop(graphqlWsEvent);
+      }
       return JSON.stringify({
         id: graphqlWsEvent.id,
         payload: null,

@@ -75,9 +75,10 @@ const composeMessageHandlers = (
   handlers: IMessageListener[],
 ): IMessageListener => {
   const composedMessageHandler = async (message: string) => {
-    const responses = await Promise.all(
-      handlers.map(handler => handler(message)),
-    );
+    const responses = [];
+    for (const handler of handlers) {
+      responses.push(await handler(message));
+    }
     return responses.filter(Boolean).join("\n");
   };
   return composedMessageHandler;
@@ -90,6 +91,8 @@ interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
   getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
   /** Called when a new subscrpition connection is made */
   onSubscriptionStart?(...args: any[]): any;
+  /** Called when a subscription is stopped */
+  onSubscriptionStop?(...args: any[]): any;
 }
 
 /**
@@ -107,6 +110,7 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
           getGripChannel: options.getGripChannel,
           getMessageResponse: AcceptAllGraphqlSubscriptionsMessageHandler({
             onStart: options.onSubscriptionStart,
+            onStop: options.onSubscriptionStop,
           }),
         },
       );
@@ -120,8 +124,8 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
       });
       // So the returned onMessage is going to be a composition of the above message handlers
       const onMessage = composeMessageHandlers([
-        graphqlWsConnectionListener.onMessage,
         storeSubscriptionsOnMessage,
+        graphqlWsConnectionListener.onMessage,
       ]);
       return {
         ...graphqlWsConnectionListener,

@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as express from "express";
+import { assertNever } from "fanout-graphql-tools/src/graphql-epcp-pubsub/EpcpPubSubMixin";
 import { v4 as uuidv4 } from "uuid";
 import { default as AcceptAllGraphqlSubscriptionsMessageHandler } from "../graphql-ws/AcceptAllGraphqlSubscriptionsMessageHandler";
 import { filterTable, ISimpleTable } from "../simple-table/SimpleTable";
@@ -12,6 +13,7 @@ import GraphqlWebSocketOverHttpConnectionListener, {
   IGraphqlWsStopMessage,
   isGraphqlWsStartMessage,
   isGraphqlWsStopMessage,
+  IWebSocketOverHTTPConnectionInfo,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
 
 interface ISubscriptionStoringMessageHandlerOptions {
@@ -104,6 +106,10 @@ const SubscriptionDeletingMessageHandler = (
 };
 
 type IMessageListener = IConnectionListener["onMessage"];
+/**
+ * Compose multiple message handlers into a single one.
+ * The resulting composition will call each of the input handlers in order and merge their responses.
+ */
 const composeMessageHandlers = (
   handlers: IMessageListener[],
 ): IMessageListener => {
@@ -115,6 +121,22 @@ const composeMessageHandlers = (
     return responses.filter(Boolean).join("\n");
   };
   return composedMessageHandler;
+};
+
+/** Create a function that will cleanup after a collection by removing that connection's subscriptions in a ISimpleTable<GraphqlSubscription> */
+const SubscriptionStorageConnectionCleanup = (
+  subscriptionStorage: ISimpleTable<IGraphqlSubscription>,
+) => async (connection: IWebSocketOverHTTPConnectionInfo): Promise<void> => {
+  const subscriptionsForConnection = await filterTable(
+    subscriptionStorage,
+    subscription => subscription.connectionId === connection.id,
+  );
+  await Promise.all(
+    subscriptionsForConnection.map(subscription =>
+      subscriptionStorage.delete(subscription),
+    ),
+  );
+  return;
 };
 
 interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
@@ -144,61 +166,62 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
       /** This connectionListener will respond to graphql-ws messages in a way that accepts all incoming subscriptions */
       const graphqlWsConnectionListener = GraphqlWebSocketOverHttpConnectionListener(
         {
+          cleanupConnection: SubscriptionStorageConnectionCleanup(
+            options.subscriptionStorage,
+          ),
           connection,
           getMessageResponse: AcceptAllGraphqlSubscriptionsMessageHandler(),
           webSocketOverHttp: {
             keepAliveIntervalSeconds: 120,
             ...options.webSocketOverHttp,
           },
-          async getGripChannel(graphqlWsMessage) {
-            const startMessage: IGraphqlWsStartMessage = isGraphqlWsStartMessage(
-              graphqlWsMessage,
-            )
-              ? graphqlWsMessage
-              : await (async () => {
-                  const stopMessage: IGraphqlWsStopMessage = graphqlWsMessage;
-                  const allStoredSubscriptions = await options.subscriptionStorage.scan();
-                  // Look up the graphql-ws start message corresponding to this stop message from the subscriptionStorage
-                  const storedSubscriptions = await filterTable(
-                    options.subscriptionStorage,
-                    s => {
-                      return (
-                        s.operationId === stopMessage.id &&
-                        s.connectionId === connection.id
-                      );
-                    },
-                  );
-                  const storedSubscription = await (async () => {
-                    switch (storedSubscriptions.length) {
-                      case 0:
-                        return;
-                      case 1:
-                        return storedSubscriptions[0];
-                      default:
-                        // @TODO getGripChannel should support returning an array of channels
-                        console.warn(
-                          `Found multiple stored subscriptions matching GQL_STOP. Expected only one. Will only use the first.`,
-                        );
-                        return storedSubscriptions[0];
-                    }
-                  })();
-                  if (storedSubscription) {
-                    const parsedStartMessage = JSON.parse(
-                      storedSubscription.startMessage,
+          async getGripChannels(channelSelector): Promise<string[]> {
+            const startMessages: IGraphqlWsStartMessage[] = await (async (): Promise<
+              IGraphqlWsStartMessage[]
+            > => {
+              if (isGraphqlWsStartMessage(channelSelector)) {
+                return [channelSelector];
+              }
+              if ("connection" in channelSelector) {
+                // look up by connectionId
+                const subscriptionsForConnection = await filterTable(
+                  options.subscriptionStorage,
+                  subscription =>
+                    subscription.connectionId === channelSelector.connection.id,
+                );
+                return await Promise.all(
+                  subscriptionsForConnection.map(s => {
+                    const startMessage = JSON.parse(s.startMessage);
+                    return startMessage;
+                  }),
+                );
+              }
+              if (isGraphqlWsStopMessage(channelSelector)) {
+                const stopMessage: IGraphqlWsStopMessage = channelSelector;
+                // Look up the graphql-ws start message corresponding to this stop message from the subscriptionStorage
+                const storedSubscriptionsForStopMessage = await filterTable(
+                  options.subscriptionStorage,
+                  s => {
+                    return (
+                      s.operationId === stopMessage.id &&
+                      s.connectionId === connection.id
                     );
-                    if (!isGraphqlWsStartMessage(parsedStartMessage)) {
-                      throw new Error(
-                        `Failed to parse IGraphqlWsStartMessage from subscription.startMessage: ${storedSubscription}`,
-                      );
-                    }
-                    return parsedStartMessage;
-                  }
-                  throw new Error(
-                    `Failed to retrieve IGraphqlWsStartMessage for graphql-ws stop message: ${stopMessage}`,
-                  );
-                })();
-            const gripChannel = options.getGripChannel(startMessage);
-            return gripChannel;
+                  },
+                );
+                return await Promise.all(
+                  storedSubscriptionsForStopMessage.map(s => {
+                    const startMessage = JSON.parse(s.startMessage);
+                    return startMessage;
+                  }),
+                );
+              }
+              assertNever(channelSelector);
+              throw new Error(
+                `Failed to retrieve gripChannels for channelSelector ${channelSelector}`,
+              );
+            })();
+            const gripChannels = startMessages.map(options.getGripChannel);
+            return gripChannels;
           },
         },
       );

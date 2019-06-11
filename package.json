@@ -15,14 +15,16 @@
   },
   "scripts": {
     "build": "npm run tsc",
-    "check-and-build": "npm run prettier:check && npm run tslint && npm run build",
+    "check": "npm run prettier:check && npm run tsc:check && npm run tslint",
+    "check-and-build": "npm run check && npm run build",
     "prettier": "prettier '{package.json,tsconfig.json,src/**/*.{ts,tsx}}' --write",
     "prettier:check": "prettier '{package.json,tsconfig.json,src/**/*.{ts,tsx}}' --check",
     "prepublishOnly": "npm run check-and-build",
     "preversion": "npm run check-and-build",
     "start": "ts-node src/FanoutGraphqlExpressServer",
-    "test": "ts-node src/test/unit",
+    "test": "ts-node src/test/unit && npm run check",
     "tsc": "tsc -p tsconfig.json",
+    "tsc:check": "npm run tsc -- --noEmit",
     "tslint": "tslint -c tslint.json 'src/**/*.ts'"
   },
   "dependencies": {

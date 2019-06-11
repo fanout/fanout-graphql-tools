@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as express from "express";
-import { assertNever } from "fanout-graphql-tools/src/graphql-epcp-pubsub/EpcpPubSubMixin";
 import { v4 as uuidv4 } from "uuid";
+import { assertNever } from "../graphql-epcp-pubsub/EpcpPubSubMixin";
 import { default as AcceptAllGraphqlSubscriptionsMessageHandler } from "../graphql-ws/AcceptAllGraphqlSubscriptionsMessageHandler";
 import { filterTable, ISimpleTable } from "../simple-table/SimpleTable";
 import WebSocketOverHttpExpress from "../websocket-over-http-express/WebSocketOverHttpExpress";

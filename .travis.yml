@@ -1,0 +1,11 @@
+language: node_js
+node_js:
+  - "8"
+deploy:
+  provider: npm
+  email: bengoering@gmail.com
+  api_key:
+    secure: H6ydRT03L8NhXPjW//kzMIuD9KWqK/hMIRwT8Vp+xPWxeMQAMz4MH+SjeCkOuui0ldWqjAjfjxAh6k79qi40YciaWvCuve7pL3xoHeaeeuC60GltDjuTa0E51XXqy853LePH5JF8CEqu8BhQvX1c3sqIn/qXQ54sHHN/J+1uDoa6ZXs9m5Jd8VBA9gLPCvwcR3E98qtsQ1N9gSOpqg20TvY55SxiG07RLye6oYQOoq6r3BtEmuA2FupqFzs/VHjra1npHSuLZeds7ky0pHDNcuY4x0ZWs0gOEBtNvPatZZBOTQMSlWbmCYdjMqTYuUIOeiaP90WjFTsls4xeBq9Ixm6JpbIvZTwU68s21/uFj6slP1m1G338xTDv5r9QfSjnA3u7i2STPgQd/ogDnyIhSSJn6c8lrziIhGmo1UE2J1xlAIb4nnPKusSKboSWv2wA/U4K19/o8pnnV9QMtSpdwt49h5z/6ZI7OJcntj4hcWyrdbg9qp3poPnpgjX5/oYyNV3gyM/E88p7r92N9UWBX5LJIbUx1lirOqAl6vRN5djrzbGrQa6VmxBjKrzfbEzZgtxSKe4gNDMd4iTYLpkpc5DE2AvI23Uf/rTaTWjLRvTsYhuTsNLfW/0kRszN32lOk4jhJuJE28MPNrfwcgcsW065S/d2e91UrxNBJGiDrZM=
+  on:
+    tags: true
+    repo: fanout/fanout-graphql-tools

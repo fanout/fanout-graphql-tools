@@ -146,19 +146,32 @@ export interface IGraphqlWebSocketOverHttpConnectionListenerOptions {
 export default (
   options: IGraphqlWebSocketOverHttpConnectionListenerOptions,
 ): IConnectionListener => {
+  /**
+   * Called to permanent end a connection, clean it up, and unsubscribe from all the connection's subscriptions.
+   * It should be called after receiving WebSocket-Over-HTTP close and disconnect events
+   */
+  const endConnection = async (
+    connection: IWebSocketOverHTTPConnectionInfo,
+  ): Promise<void> => {
+    const gripChannelsForConnection = await options.getGripChannels({
+      connection: { id: options.connection.id },
+    });
+    for (const gripChannel of gripChannelsForConnection) {
+      console.debug(
+        `GraphqlWebSocketOverHttpConnectionListener unsubscribing from grip-channel ${gripChannel}`,
+      );
+      options.connection.webSocketContext.unsubscribe(gripChannel);
+    }
+    await options.cleanupConnection(options.connection);
+  };
   return {
     async onClose() {
       console.debug("GraphqlWebSocketOverHttpConnectionListener onClose");
-      const gripChannelsForConnection = await options.getGripChannels({
-        connection: { id: options.connection.id },
-      });
-      for (const gripChannel of gripChannelsForConnection) {
-        console.debug(
-          `GraphqlWebSocketOverHttpConnectionListener unsubscribing from grip-channel ${gripChannel}`,
-        );
-        options.connection.webSocketContext.unsubscribe(gripChannel);
-      }
-      await options.cleanupConnection(options.connection);
+      await endConnection(options.connection);
+    },
+    async onDisconnect() {
+      console.debug("GraphqlWebSocketOverHttpConnectionListener onDisconnect");
+      await endConnection(options.connection);
     },
     async onMessage(message) {
       const graphqlWsEvent = JSON.parse(message);

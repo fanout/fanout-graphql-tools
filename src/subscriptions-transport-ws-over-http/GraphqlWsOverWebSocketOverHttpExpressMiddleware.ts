@@ -47,6 +47,7 @@ const SubscriptionStoringMessageHandler = (
   );
   await options.subscriptionStorage.insert({
     connectionId: options.connection.id,
+    createdAt: new Date(Date.now()).toISOString(),
     id: uuidv4(),
     operationId,
     startMessage: message,

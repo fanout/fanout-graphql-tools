@@ -2,6 +2,8 @@
 export interface IGraphqlSubscription {
   /** unique identifier for the client connection that issued this subscription. A connection can create many subscriptions */
   connectionId: string;
+  /** date the subscription was stored. As [ISO_8601](http://en.wikipedia.org/wiki/ISO_8601) UTC string */
+  createdAt: string;
   /** unique identifier for the subscription */
   id: string;
   /** Provided by the subscribing client in graphql-ws 'GQL_START' message. Must be sent in each published 'GQL_DATA' message */

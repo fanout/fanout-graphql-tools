@@ -1,12 +1,8 @@
 import { getMainDefinition } from "apollo-utilities";
-import { OperationDefinitionNode } from "graphql";
 import gql from "graphql-tag";
 import * as grip from "grip";
-
-interface IOnOpenResponse {
-  /** response headers */
-  headers: Record<string, string>;
-}
+import { IConnectionListener } from "../websocket-over-http-express/WebSocketOverHttpConnectionListener";
+import { IWebSocketOverHTTPConnectionInfo } from "../websocket-over-http-express/WebSocketOverHttpExpress";
 
 /**
  * Given a subscription IGraphqlWsStartEventPayload, return the name of the subscription field.
@@ -37,26 +33,6 @@ export const getSubscriptionOperationFieldName = (
   const gripChannel = selectedFieldName;
   return gripChannel;
 };
-
-export interface IConnectionListener {
-  /** Called when connection is closed explicitly */
-  onClose?(closeCode: string): Promise<void>;
-  /** Called when connection is disconnected uncleanly */
-  onDisconnect?(): Promise<void>;
-  /** Called with each message on the socket. Should return promise of messages to issue in response */
-  onMessage(message: string): Promise<string | void>;
-  /** Called when connection opens */
-  onOpen?(): Promise<void | IOnOpenResponse>;
-}
-
-export interface IWebSocketOverHTTPConnectionInfo {
-  /** Connection-ID from Pushpin */
-  id: string;
-  /** WebSocketContext for this connection. Can be used to issue grip control messages */
-  webSocketContext: grip.WebSocketContext;
-  /** Sec-WebSocket-Protocol */
-  protocol?: string;
-}
 
 /** interface for payload that comes up in a graphql-ws start event */
 export interface IGraphqlWsStartEventPayload {

@@ -3,9 +3,13 @@ import * as http from "http";
 import { ISimpleTable } from "../simple-table/SimpleTable";
 import { IGraphqlSubscription } from "./GraphqlSubscription";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
-import GraphqlWsOverWebSocketOverHttpExpressMiddleware from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
+import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
+  IStoredConnection,
+} from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 
 interface IGraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstallerOptions {
+  /** table to store information about each ws-over-http connection */
+  connectionStorage: ISimpleTable<IStoredConnection>;
   /** table to store information about each Graphql Subscription */
   subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
   /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */

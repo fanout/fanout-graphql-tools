@@ -1,19 +1,25 @@
 import * as assert from "assert";
 import * as express from "express";
+import { WebSocketEvent } from "grip";
 import { v4 as uuidv4 } from "uuid";
 import { assertNever } from "../graphql-epcp-pubsub/EpcpPubSubMixin";
 import { default as AcceptAllGraphqlSubscriptionsMessageHandler } from "../graphql-ws/AcceptAllGraphqlSubscriptionsMessageHandler";
 import { filterTable, ISimpleTable } from "../simple-table/SimpleTable";
-import WebSocketOverHttpExpress from "../websocket-over-http-express/WebSocketOverHttpExpress";
+import {
+  ComposedConnectionListener,
+  composeMessageHandlers,
+  IConnectionListener,
+} from "../websocket-over-http-express/WebSocketOverHttpConnectionListener";
+import WebSocketOverHttpExpress, {
+  IWebSocketOverHTTPConnectionInfo,
+} from "../websocket-over-http-express/WebSocketOverHttpExpress";
 import { IGraphqlSubscription } from "./GraphqlSubscription";
 import GraphqlWebSocketOverHttpConnectionListener, {
   getSubscriptionOperationFieldName,
-  IConnectionListener,
   IGraphqlWsStartMessage,
   IGraphqlWsStopMessage,
   isGraphqlWsStartMessage,
   isGraphqlWsStopMessage,
-  IWebSocketOverHTTPConnectionInfo,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
 
 interface ISubscriptionStoringMessageHandlerOptions {
@@ -106,24 +112,6 @@ const SubscriptionDeletingMessageHandler = (
   );
 };
 
-type IMessageListener = IConnectionListener["onMessage"];
-/**
- * Compose multiple message handlers into a single one.
- * The resulting composition will call each of the input handlers in order and merge their responses.
- */
-const composeMessageHandlers = (
-  handlers: IMessageListener[],
-): IMessageListener => {
-  const composedMessageHandler = async (message: string) => {
-    const responses = [];
-    for (const handler of handlers) {
-      responses.push(await handler(message));
-    }
-    return responses.filter(Boolean).join("\n");
-  };
-  return composedMessageHandler;
-};
-
 /** Create a function that will cleanup after a collection by removing that connection's subscriptions in a ISimpleTable<GraphqlSubscription> */
 const SubscriptionStorageConnectionCleanup = (
   subscriptionStorage: ISimpleTable<IGraphqlSubscription>,
@@ -140,7 +128,127 @@ const SubscriptionStorageConnectionCleanup = (
   return;
 };
 
+/** Interface for ws-over-http connections stored in the db */
+export interface IStoredConnection {
+  /** When the connection was createdAt (ISO_8601 string) */
+  createdAt: string;
+  /** unique connection id */
+  id: string;
+  /** datetime that this connection should timeout and be deleted (ISO_8601 string) */
+  expiresAt: string;
+}
+
+/**
+ * ConnectionListener that will store Connection info.
+ * On connection open, store a record in connectionStorage.
+ * On every subsequent ws-over-http request, consider whether to update connection.expiresAt to push out the date at which it should be considered expired because of inactivity/timeout.
+ * To minimize db reads/writes, store a Meta-Connection-Expiration-Delay-At value in the ws-over-http state to help decide when to update connection.expiresAt with a write to connectionStorage.
+ */
+const ConnectionStoringConnectionListener = (options: {
+  /** info about the connection */
+  connection: IWebSocketOverHTTPConnectionInfo;
+  /** table to store information about each ws-over-http connection */
+  connectionStorage: ISimpleTable<IStoredConnection>;
+  /** how often to ask ws-over-http gateway to make keepalive requests */
+  keepAliveIntervalSeconds: number;
+}): IConnectionListener => {
+  // Return date of when we should consider the connection expired because of inactivity.
+  // now + (2 * keepAliveIntervalSeconds)
+  const getNextExpiresAt = (): Date => {
+    const d = new Date();
+    d.setSeconds(d.getSeconds() + 2 * options.keepAliveIntervalSeconds);
+    return d;
+  };
+  // Return a date of when we should next delay connection expiration.
+  // It's now + keepAliveIntervalSeconds
+  const getNextExpirationDelayAt = (): Date => {
+    const d = new Date();
+    d.setSeconds(d.getSeconds() + options.keepAliveIntervalSeconds);
+    return d;
+  };
+  const metaConnectionExpirationDelayAt = "Meta-Connection-Expiration-Delay-At";
+  /** Return HTTP response header key/value that will delay the connection expiration */
+  const delayExpirationDelayResponseHeaders = (): Record<string, string> => {
+    return {
+      [`Set-${metaConnectionExpirationDelayAt}`]: getNextExpirationDelayAt().toISOString(),
+    };
+  };
+  // cleanup after the connection once it is closed or disconnected
+  const cleanupConnection = async () => {
+    await options.connectionStorage.delete({ id: options.connection.id });
+  };
+  return {
+    async onClose() {
+      await cleanupConnection();
+    },
+    async onDisconnect() {
+      await cleanupConnection();
+    },
+    /** On connection open, store the connection */
+    async onOpen() {
+      await options.connectionStorage.insert({
+        createdAt: new Date().toISOString(),
+        expiresAt: getNextExpiresAt().toISOString(),
+        id: options.connection.id,
+      });
+      return {
+        headers: {
+          ...delayExpirationDelayResponseHeaders(),
+        },
+      };
+    },
+    /** On every WebSocket-Over-HTTP request, check if it's time to delay expiration of the connection and, if so, update the connection.expiresAt in connectionStorage */
+    async onHttpRequest(request) {
+      const delayExpirationAtHeaderValue =
+        request.headers[metaConnectionExpirationDelayAt.toLowerCase()];
+      const delayExpirationAtISOString = Array.isArray(
+        delayExpirationAtHeaderValue,
+      )
+        ? delayExpirationAtHeaderValue[0]
+        : delayExpirationAtHeaderValue;
+      if (!delayExpirationAtISOString) {
+        // This is probably the connection open request, in which case we just created the connection. We don't need to refresh it
+        return;
+      }
+      const delayExpirationAtDate = new Date(
+        Date.parse(delayExpirationAtISOString),
+      );
+      if (new Date() < delayExpirationAtDate) {
+        // we don't need to delay expiration yet.
+        return;
+      }
+      const storedConnection = await options.connectionStorage.get({
+        id: options.connection.id,
+      });
+      if (!storedConnection) {
+        console.warn(
+          `Got WebSocket-Over-Http request with ${metaConnectionExpirationDelayAt}, but there is no corresponding stored connection. This should only happen if the connection has been deleted some other way. Returning DISCONNECT message to tell the gateway that this connection should be forgotten.`,
+        );
+        options.connection.webSocketContext.outEvents.push(
+          new WebSocketEvent("DISCONNECT"),
+        );
+        return;
+      }
+      // update expiration date of connection in storage
+      await options.connectionStorage.update(
+        { id: options.connection.id },
+        {
+          expiresAt: getNextExpiresAt().toISOString(),
+        },
+      );
+      // And update the ws-over-http state management to push out the next time we need to delay expiration
+      return {
+        headers: {
+          ...delayExpirationDelayResponseHeaders(),
+        },
+      };
+    },
+  };
+};
+
 interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
+  /** table to store information about each ws-over-http connection */
+  connectionStorage: ISimpleTable<IStoredConnection>;
   /** table to store information about each Graphql Subscription */
   subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
   /** WebSocket-Over-HTTP options */
@@ -162,6 +270,8 @@ interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
 export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
   options: IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions,
 ): express.RequestHandler => {
+  const { connectionStorage } = options;
+  const { keepAliveIntervalSeconds = 120 } = options.webSocketOverHttp || {};
   return WebSocketOverHttpExpress({
     getConnectionListener(connection) {
       /** This connectionListener will respond to graphql-ws messages in a way that accepts all incoming subscriptions */
@@ -173,7 +283,7 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
           connection,
           getMessageResponse: AcceptAllGraphqlSubscriptionsMessageHandler(),
           webSocketOverHttp: {
-            keepAliveIntervalSeconds: 120,
+            keepAliveIntervalSeconds,
             ...options.webSocketOverHttp,
           },
           async getGripChannels(channelSelector): Promise<string[]> {
@@ -238,32 +348,38 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
       const deleteSubscriptionsOnStopMessageHandler = SubscriptionDeletingMessageHandler(
         { connection, subscriptionStorage },
       );
+      const subscriptionEventCallbacksConnectionListener: IConnectionListener = {
+        onMessage: composeMessageHandlers([
+          // We want this at the end so we can rely on onSubscriptionStop being called after subscriptionStorage has been updated
+          GraphqlWsStartMessageHandler(async () => {
+            if (options.onSubscriptionStart) {
+              options.onSubscriptionStart();
+            }
+          }),
+          // We want this at the end so we can rely on onSubscriptionStop being called after subscriptionStorage has been updated
+          GraphqlWsStopMessageHandler(async () => {
+            if (options.onSubscriptionStop) {
+              options.onSubscriptionStop();
+            }
+          }),
+        ]),
+      };
       /**
        * Returned onMessage is going to be a composition of the above message handlers.
        * Note that storeSubscriptions happens at the beginning, and deleteSubscriptionsOnStop happens at the end.
        * This way any message handlers in the middle can count on the stored subscription being in storage.
        */
-      const onMessage = composeMessageHandlers([
-        storeSubscriptionsMessageHandler,
-        graphqlWsConnectionListener.onMessage,
-        deleteSubscriptionsOnStopMessageHandler,
-        // We want this at the end so we can rely on onSubscriptionStop being called after subscriptionStorage has been updated
-        GraphqlWsStartMessageHandler(async () => {
-          if (options.onSubscriptionStart) {
-            options.onSubscriptionStart();
-          }
+      return ComposedConnectionListener([
+        ConnectionStoringConnectionListener({
+          connection,
+          connectionStorage,
+          keepAliveIntervalSeconds,
         }),
-        // We want this at the end so we can rely on onSubscriptionStop being called after subscriptionStorage has been updated
-        GraphqlWsStopMessageHandler(async () => {
-          if (options.onSubscriptionStop) {
-            options.onSubscriptionStop();
-          }
-        }),
+        { onMessage: storeSubscriptionsMessageHandler },
+        graphqlWsConnectionListener,
+        { onMessage: deleteSubscriptionsOnStopMessageHandler },
+        subscriptionEventCallbacksConnectionListener,
       ]);
-      return {
-        ...graphqlWsConnectionListener,
-        onMessage,
-      };
     },
   });
 };

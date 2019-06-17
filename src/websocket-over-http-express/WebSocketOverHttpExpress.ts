@@ -1,10 +1,16 @@
 import * as bodyParser from "body-parser";
 import * as express from "express";
 import * as grip from "grip";
-import {
-  IConnectionListener,
-  IWebSocketOverHTTPConnectionInfo,
-} from "../subscriptions-transport-ws-over-http/GraphqlWebSocketOverHttpConnectionListener";
+import { IConnectionListener } from "./WebSocketOverHttpConnectionListener";
+
+export interface IWebSocketOverHTTPConnectionInfo {
+  /** Connection-ID from Pushpin */
+  id: string;
+  /** WebSocketContext for this connection. Can be used to issue grip control messages */
+  webSocketContext: grip.WebSocketContext;
+  /** Sec-WebSocket-Protocol */
+  protocol?: string;
+}
 
 type AsyncRequestHandler = (
   req: express.Request,
@@ -72,6 +78,14 @@ export default (
           protocol: req.get("sec-websocket-protocol"),
           webSocketContext: gripWebSocketContext,
         });
+        const setHeaders = (
+          response: express.Response,
+          headers: Record<string, string>,
+        ) => {
+          for (const [header, value] of Object.entries(headers)) {
+            res.setHeader(header, value);
+          }
+        };
         const eventsOut: grip.WebSocketEvent[] = [];
         for (const event of events) {
           switch (event.getType()) {
@@ -92,11 +106,7 @@ export default (
               if (connectionListener.onOpen) {
                 const onOpenResponse = await connectionListener.onOpen();
                 if (onOpenResponse && onOpenResponse.headers) {
-                  for (const [header, value] of Object.entries(
-                    onOpenResponse.headers,
-                  )) {
-                    res.setHeader(header, value);
-                  }
+                  setHeaders(res, onOpenResponse.headers);
                 }
               }
               eventsOut.push(new grip.WebSocketEvent("OPEN"));
@@ -107,14 +117,24 @@ export default (
                 break;
               }
               const message = content.toString();
-              const response = await connectionListener.onMessage(message);
-              if (response) {
-                eventsOut.push(new grip.WebSocketEvent("TEXT", response));
+              if (connectionListener.onMessage) {
+                const response = await connectionListener.onMessage(message);
+                if (response) {
+                  eventsOut.push(new grip.WebSocketEvent("TEXT", response));
+                }
               }
               break;
             default:
               throw new Error(`Unexpected event type ${event.getType()}`);
             // assertNever(event)
+          }
+        }
+        if (typeof connectionListener.onHttpRequest === "function") {
+          const onHttpRequestResponse = await connectionListener.onHttpRequest({
+            headers: req.headers,
+          });
+          if (onHttpRequestResponse && onHttpRequestResponse.headers) {
+            setHeaders(res, onHttpRequestResponse.headers);
           }
         }
         res.status(200);

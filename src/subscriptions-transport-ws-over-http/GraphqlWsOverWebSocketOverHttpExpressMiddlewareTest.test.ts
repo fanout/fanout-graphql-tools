@@ -42,6 +42,7 @@ import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionList
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
 } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
+import { WebSocketOverHttpStorageCleaner } from "./WebSocketOverHttpStorageCleaner";
 
 interface ISubscriptionsListener {
   /** called on subscription start */
@@ -234,6 +235,7 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       Expect(storedConnectionsAfterSubscription.length).toEqual(1);
       const storedSubscriptionsAfterSubscription = await subscriptionStorage.scan();
       Expect(storedSubscriptionsAfterSubscription.length).toEqual(1);
+
       // Now let's make a mutation that should result in a message coming from the subscription
       const postToAdd = {
         author: "me",
@@ -243,11 +245,35 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
         SimpleGraphqlApiMutations.addPost(postToAdd),
       );
       Expect(mutationResult.data.addPost.comment).toEqual(postToAdd.comment);
+      await timer(500);
       Expect(items.length).toEqual(1);
       const firstPostAddedMessage = items[0];
       Expect(firstPostAddedMessage.data.postAdded.comment).toEqual(
         postToAdd.comment,
       );
+
+      // Now we want to make sure it's possible to clean up records from storage once they have expired due to inactivity
+      const cleanUpStorage = await WebSocketOverHttpStorageCleaner({
+        connectionStorage,
+        subscriptionStorage,
+      });
+      // first try a cleanup right now. Right after creating the connection and subscription. It should not result in any deleted rows because it's too soon. They haven't expired yet.
+      const subscriptionsAfterEarlyCleanup = await subscriptionStorage.scan();
+      Expect(subscriptionsAfterEarlyCleanup.length).toEqual(1);
+      const connectionsAfterEarlyCleanup = await connectionStorage.scan();
+      Expect(connectionsAfterEarlyCleanup.length).toEqual(1);
+
+      // Five minutes from now - At this point they should be expired
+      const simulateCleanupAtDate = (() => {
+        return new Date(
+          Date.parse(connectionsAfterEarlyCleanup[0].expiresAt) + 1,
+        );
+      })();
+      await cleanUpStorage(simulateCleanupAtDate);
+      const subscriptionsAfterCleanup = await subscriptionStorage.scan();
+      const connectionsAfterCleanup = await connectionStorage.scan();
+      Expect(subscriptionsAfterCleanup.length).toEqual(0);
+      Expect(connectionsAfterCleanup.length).toEqual(0);
     });
     return;
   }
@@ -272,4 +298,9 @@ function DecorateIf(test: () => boolean, decorator: Decorator): Decorator {
   return () => {
     return;
   };
+}
+
+/** return promise that resolves after some milliseconds */
+export function timer(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }

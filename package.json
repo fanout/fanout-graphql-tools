@@ -1,6 +1,6 @@
 {
   "name": "fanout-graphql-tools",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "",
   "main": "dist/src",
   "types": "dist/src/index.d.ts",

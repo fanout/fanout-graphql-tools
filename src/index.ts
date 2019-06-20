@@ -15,5 +15,6 @@ export * from "./subscriptions-transport-apollo/ApolloSubscriptionServerOptions"
 export * from "./subscriptions-transport-ws-over-http/GraphqlWebSocketOverHttpConnectionListener";
 export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpRequestListener";
+export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpStorageCleaner";
 export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller";
 export * from "./subscriptions-transport-ws-over-http/GraphqlSubscription";

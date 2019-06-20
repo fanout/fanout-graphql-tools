@@ -2,7 +2,7 @@ import { ISimpleTable } from "../simple-table/SimpleTable";
 import { IGraphqlSubscription } from "./GraphqlSubscription";
 import { IStoredConnection } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 
-export interface IWebSocketOverHttpStorageCleanerOptions {
+export interface IGraphqlWsOverWebSocketOverHttpStorageCleanerOptions {
   /** table to store information about each ws-over-http connection */
   connectionStorage: ISimpleTable<IStoredConnection>;
   /** table to store information about each Graphql Subscription */
@@ -14,8 +14,8 @@ export interface IWebSocketOverHttpStorageCleanerOptions {
  * ConnectionStoringConnectionListener will try to keep aa `connection.expiresAt` field up to date to detect when a connection should 'timeout' and be treated as gone forever.
  * This Cleaner is a function that, when called, will delete all the connections whose expiresAt is in the past, and for each of those connections, any corresponding subscriptions.
  */
-export const WebSocketOverHttpStorageCleaner = (
-  options: IWebSocketOverHttpStorageCleanerOptions,
+export const GraphqlWsOverWebSocketOverHttpStorageCleaner = (
+  options: IGraphqlWsOverWebSocketOverHttpStorageCleanerOptions,
 ) => {
   /**
    * @param now {Date|undefined} Time to consider now when comparing against connection.expiresAt. If not present, will use now. But pass a value to, for example, simulate a future datetime

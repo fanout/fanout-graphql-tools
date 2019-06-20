@@ -42,7 +42,7 @@ import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionList
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
 } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
-import { WebSocketOverHttpStorageCleaner } from "./WebSocketOverHttpStorageCleaner";
+import { GraphqlWsOverWebSocketOverHttpStorageCleaner } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
 
 interface ISubscriptionsListener {
   /** called on subscription start */
@@ -253,10 +253,12 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       );
 
       // Now we want to make sure it's possible to clean up records from storage once they have expired due to inactivity
-      const cleanUpStorage = await WebSocketOverHttpStorageCleaner({
-        connectionStorage,
-        subscriptionStorage,
-      });
+      const cleanUpStorage = await GraphqlWsOverWebSocketOverHttpStorageCleaner(
+        {
+          connectionStorage,
+          subscriptionStorage,
+        },
+      );
       // first try a cleanup right now. Right after creating the connection and subscription. It should not result in any deleted rows because it's too soon. They haven't expired yet.
       const subscriptionsAfterEarlyCleanup = await subscriptionStorage.scan();
       Expect(subscriptionsAfterEarlyCleanup.length).toEqual(1);

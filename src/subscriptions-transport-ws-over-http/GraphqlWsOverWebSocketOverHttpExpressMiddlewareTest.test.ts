@@ -39,7 +39,10 @@ import WebSocketApolloClient from "../testing-tools/WebSocketApolloClient";
 import { withListeningServer } from "../testing-tools/withListeningServer";
 import { IGraphqlSubscription } from "./GraphqlSubscription";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
-import GraphqlWsOverWebSocketOverHttpExpressMiddleware from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
+import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
+  IStoredConnection,
+} from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
+import { WebSocketOverHttpStorageCleaner } from "./WebSocketOverHttpStorageCleaner";
 
 interface ISubscriptionsListener {
   /** called on subscription start */
@@ -47,6 +50,8 @@ interface ISubscriptionsListener {
 }
 
 interface IGraphqlHttpAppOptions {
+  /** table to store information about each ws-over-http connection */
+  connectionStorage: ISimpleTable<IStoredConnection>;
   /** configure graphql API */
   graphql: {
     /** GraphQL API typeDefs */
@@ -85,6 +90,7 @@ const WsOverHttpGraphqlHttpApp = (options: IGraphqlHttpAppOptions) => {
   })(new PubSub());
   const expressApplication = express().use(
     GraphqlWsOverWebSocketOverHttpExpressMiddleware({
+      connectionStorage: options.connectionStorage,
       getGripChannel: options.webSocketOverHttp.getGripChannel,
       onSubscriptionStart:
         subscriptionListener && subscriptionListener.onConnect,
@@ -133,6 +139,7 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       SimpleGraphqlApi().typeDefs,
     );
     const app = WsOverHttpGraphqlHttpApp({
+      connectionStorage: MapSimpleTable<IStoredConnection>(),
       graphql: {
         getResolvers: ({ pubsub }) => SimpleGraphqlApi({ pubsub }).resolvers,
         typeDefs: SimpleGraphqlApi().typeDefs,
@@ -171,7 +178,8 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
   }
   /**
    * test we can make a server and connect to it through pushpin.
-   * This requires that pushpin be running and have /etc/pushpin/routes configured to route traffic to serverPort, e.g. "*,debug localhost:57410,over_http"
+   * This requires that pushpin be running and have /etc/pushpin/routes configured to route traffic to serverPort, e.g. "*,debug localhost:57410,over_http".
+   * If pushpin is running, the default value of PUSHPIN_PROXY_URL=http://localhost:7999
    */
   @DecorateIf(
     () => !Boolean(process.env.PUSHPIN_PROXY_URL),
@@ -192,10 +200,12 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       latestSubscriptionChanged,
     ] = ChangingValue();
     const subscriptionStorage = MapSimpleTable<IGraphqlSubscription>();
+    const connectionStorage = MapSimpleTable<IStoredConnection>();
     const graphqlSchema = buildSchemaFromTypeDefinitions(
       SimpleGraphqlApi().typeDefs,
     );
     const app = WsOverHttpGraphqlHttpApp({
+      connectionStorage,
       graphql: {
         getResolvers: ({ pubsub }) => SimpleGraphqlApi({ pubsub }).resolvers,
         typeDefs: SimpleGraphqlApi().typeDefs,
@@ -220,6 +230,13 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
         apolloClient.subscribe(SimpleGraphqlApiSubscriptions.postAdded()),
       );
       await latestSubscriptionChanged();
+      // Check that the subscription resulted in storing info about the subscription and also the graphql-ws connection it was sent over
+      const storedConnectionsAfterSubscription = await connectionStorage.scan();
+      Expect(storedConnectionsAfterSubscription.length).toEqual(1);
+      const storedSubscriptionsAfterSubscription = await subscriptionStorage.scan();
+      Expect(storedSubscriptionsAfterSubscription.length).toEqual(1);
+
+      // Now let's make a mutation that should result in a message coming from the subscription
       const postToAdd = {
         author: "me",
         comment: "first!",
@@ -228,11 +245,35 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
         SimpleGraphqlApiMutations.addPost(postToAdd),
       );
       Expect(mutationResult.data.addPost.comment).toEqual(postToAdd.comment);
+      await timer(500);
       Expect(items.length).toEqual(1);
       const firstPostAddedMessage = items[0];
       Expect(firstPostAddedMessage.data.postAdded.comment).toEqual(
         postToAdd.comment,
       );
+
+      // Now we want to make sure it's possible to clean up records from storage once they have expired due to inactivity
+      const cleanUpStorage = await WebSocketOverHttpStorageCleaner({
+        connectionStorage,
+        subscriptionStorage,
+      });
+      // first try a cleanup right now. Right after creating the connection and subscription. It should not result in any deleted rows because it's too soon. They haven't expired yet.
+      const subscriptionsAfterEarlyCleanup = await subscriptionStorage.scan();
+      Expect(subscriptionsAfterEarlyCleanup.length).toEqual(1);
+      const connectionsAfterEarlyCleanup = await connectionStorage.scan();
+      Expect(connectionsAfterEarlyCleanup.length).toEqual(1);
+
+      // Five minutes from now - At this point they should be expired
+      const simulateCleanupAtDate = (() => {
+        return new Date(
+          Date.parse(connectionsAfterEarlyCleanup[0].expiresAt) + 1,
+        );
+      })();
+      await cleanUpStorage(simulateCleanupAtDate);
+      const subscriptionsAfterCleanup = await subscriptionStorage.scan();
+      const connectionsAfterCleanup = await connectionStorage.scan();
+      Expect(subscriptionsAfterCleanup.length).toEqual(0);
+      Expect(connectionsAfterCleanup.length).toEqual(0);
     });
     return;
   }
@@ -257,4 +298,9 @@ function DecorateIf(test: () => boolean, decorator: Decorator): Decorator {
   return () => {
     return;
   };
+}
+
+/** return promise that resolves after some milliseconds */
+export function timer(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }

@@ -19,6 +19,17 @@ export interface ISimpleTable<Entity> {
   scan(): Promise<Entity[]>;
   /** Scan through batches of entities, passing them to callback */
   scan(callback: (items: Entity[]) => Promise<boolean>): Promise<void>;
+  /**
+   * Updates a documents in the table.
+   * If no item matches query exists, a new one should be created.
+   *
+   * @param query An object with the primary key ("id" by default) assigned
+   * the value to lookup.
+   * @param updates An object with all document properties that should be
+   * updated.
+   * @returns A promise for the success or failure of the update.
+   */
+  update(query: IQueryById, updates: Partial<Entity>): Promise<void>;
 }
 
 interface IHasId {
@@ -61,6 +72,12 @@ export const MapSimpleTable = <Entity extends IHasId>(
       map.set(entity.id, entity);
     },
     scan,
+    async update(query: IQueryById, updates) {
+      const got = map.get(query.id) || {};
+      const updated = { ...query, ...got, ...updates };
+      // Type assertion is bad but required to emulated untyped nature of the pulumi/cloud aws table implementation
+      map.set(query.id, updated as Entity);
+    },
   };
 };
 

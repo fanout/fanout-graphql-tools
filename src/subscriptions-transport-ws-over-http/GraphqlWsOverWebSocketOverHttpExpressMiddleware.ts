@@ -21,6 +21,7 @@ import GraphqlWebSocketOverHttpConnectionListener, {
   isGraphqlWsStartMessage,
   isGraphqlWsStopMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
+import { cleanupStorageAfterConnection } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
 
 interface ISubscriptionStoringMessageHandlerOptions {
   /** WebSocket Connection Info */
@@ -151,6 +152,8 @@ const ConnectionStoringConnectionListener = (options: {
   connectionStorage: ISimpleTable<IStoredConnection>;
   /** how often to ask ws-over-http gateway to make keepalive requests */
   keepAliveIntervalSeconds: number;
+  /** table where subscriptions are stored. Needed to cleanup after connections */
+  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
 }): IConnectionListener => {
   // Return date of when we should consider the connection expired because of inactivity.
   // now + (2 * keepAliveIntervalSeconds)
@@ -175,7 +178,11 @@ const ConnectionStoringConnectionListener = (options: {
   };
   // cleanup after the connection once it is closed or disconnected
   const cleanupConnection = async () => {
-    await options.connectionStorage.delete({ id: options.connection.id });
+    await cleanupStorageAfterConnection({
+      connection: { id: options.connection.id },
+      connectionStorage: options.connectionStorage,
+      subscriptionStorage: options.subscriptionStorage,
+    });
   };
   return {
     async onClose() {
@@ -374,6 +381,7 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
           connection,
           connectionStorage,
           keepAliveIntervalSeconds,
+          subscriptionStorage,
         }),
         { onMessage: storeSubscriptionsMessageHandler },
         graphqlWsConnectionListener,

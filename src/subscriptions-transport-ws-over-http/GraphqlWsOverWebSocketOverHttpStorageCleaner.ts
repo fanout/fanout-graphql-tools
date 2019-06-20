@@ -38,19 +38,43 @@ export const GraphqlWsOverWebSocketOverHttpStorageCleaner = (
               return;
             }
             // connection has expired.
-            // Delete all subscriptions for connection
-            await deleteSubscriptionsForConnection(
-              options.subscriptionStorage,
-              { id: connection.id },
-            );
-            // and delete the connection itself
-            await options.connectionStorage.delete({ id: connection.id });
+            await cleanupStorageAfterConnection({
+              connection: {
+                id: connection.id,
+              },
+              connectionStorage: options.connectionStorage,
+              subscriptionStorage: options.subscriptionStorage,
+            });
           }),
         );
         return true;
       },
     );
   };
+};
+
+/**
+ * Cleanup the stored rows associated with a connection when it is no longer needed.
+ * i.e. delete the connection record, but also any subscription rows created on that connection.
+ */
+export const cleanupStorageAfterConnection = async (options: {
+  /** table to store information about each ws-over-http connection */
+  connectionStorage: ISimpleTable<IStoredConnection>;
+  /** table to store information about each Graphql Subscription */
+  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
+  /** connection to cleanup */
+  connection: {
+    /** connection id of connection to cleanup after */
+    id: string;
+  };
+}) => {
+  const { connection } = options;
+  // Delete all subscriptions for connection
+  await deleteSubscriptionsForConnection(options.subscriptionStorage, {
+    id: connection.id,
+  });
+  // and delete the connection itself
+  await options.connectionStorage.delete({ id: connection.id });
 };
 
 /**

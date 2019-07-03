@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as express from "express";
+import * as graphql from "graphql";
 import { WebSocketEvent } from "grip";
 import { v4 as uuidv4 } from "uuid";
 import { assertNever } from "../graphql-epcp-pubsub/EpcpPubSubMixin";
@@ -129,6 +130,65 @@ const SubscriptionStorageConnectionCleanup = (
   return;
 };
 
+/** Message handler that will properly handle graphql-ws subscription operations
+ * by calling `subscribe` export of `graphql` package
+ */
+const ExecuteGraphqlWsSubscriptionsMessageHandler = (options: {
+  /** ws-over-http info */
+  webSocketOverHttp: {
+    /** info aobut the ws-over-http connection */
+    connection: IWebSocketOverHTTPConnectionInfo;
+  };
+  /** graphql resolver root value */
+  rootValue?: any;
+  /** graphql schema to evaluate subscriptions against */
+  schema: graphql.GraphQLSchema;
+}) => async (message: string) => {
+  const graphqlWsEvent = JSON.parse(message);
+  const operation = graphqlWsEvent && graphqlWsEvent.payload;
+  if (!(graphqlWsEvent && graphqlWsEvent.type === "start" && operation)) {
+    // not a graphql-ws subscription start. Do nothing
+    return;
+  }
+  const queryDocument = graphql.parse(operation.query);
+  // const validationErrors = graphql.validate(queryDocument)
+  const operationAST = graphql.getOperationAST(
+    queryDocument,
+    operation.operationName || "",
+  );
+  if (!(operationAST && operationAST.operation === "subscription")) {
+    // not a subscription. do nothing
+    return;
+  }
+  const contextValue = {
+    webSocketOverHttp: {
+      connection: options.webSocketOverHttp.connection,
+    },
+  };
+  const subscriptionAsyncIterator = await graphql.subscribe({
+    contextValue,
+    document: queryDocument,
+    operationName: operation.operationName,
+    rootValue: options.rootValue,
+    schema: options.schema,
+    variableValues: operation.variables,
+  });
+  if ("next" in subscriptionAsyncIterator) {
+    // may need to call this to actually trigger underlying subscription resolver.
+    // When underlying PubSub has SubscriptionStoragePubSubMixin, this will result in storing some info
+    // about what PubSub event names are subscribed to.
+    subscriptionAsyncIterator.next();
+  }
+  if (
+    "return" in subscriptionAsyncIterator &&
+    subscriptionAsyncIterator.return
+  ) {
+    // but we don't want to keep listening on this terator. Subscription events will be broadcast to EPCP gateway
+    // at time of mutation.
+    subscriptionAsyncIterator.return();
+  }
+};
+
 /** Interface for ws-over-http connections stored in the db */
 export interface IStoredConnection {
   /** When the connection was createdAt (ISO_8601 string) */
@@ -256,6 +316,8 @@ const ConnectionStoringConnectionListener = (options: {
 interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
   /** table to store information about each ws-over-http connection */
   connectionStorage: ISimpleTable<IStoredConnection>;
+  /** graphql schema */
+  schema: graphql.GraphQLSchema;
   /** table to store information about each Graphql Subscription */
   subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
   /** WebSocket-Over-HTTP options */
@@ -383,6 +445,12 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
           keepAliveIntervalSeconds,
           subscriptionStorage,
         }),
+        {
+          onMessage: ExecuteGraphqlWsSubscriptionsMessageHandler({
+            ...options,
+            webSocketOverHttp: { connection },
+          }),
+        },
         { onMessage: storeSubscriptionsMessageHandler },
         graphqlWsConnectionListener,
         { onMessage: deleteSubscriptionsOnStopMessageHandler },

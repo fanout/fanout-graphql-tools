@@ -132,8 +132,9 @@ export const SimpleGraphqlApi = ({
     Subscription: {
       postAdded: {
         // Additional event labels can be passed to asyncIterator creation
-        subscribe: () =>
-          pubsub.asyncIterator([SimpleGraphqlApiPubSubTopic.POST_ADDED]),
+        subscribe: () => {
+          return pubsub.asyncIterator([SimpleGraphqlApiPubSubTopic.POST_ADDED]);
+        },
       },
     },
   };

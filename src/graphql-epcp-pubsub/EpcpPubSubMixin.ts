@@ -76,7 +76,7 @@ export const EpcpPubSubMixin = (options: IEpcpPubSubMixinOptions) => (
     grip.parseGripUri(options.grip.url),
   );
   return {
-    asyncIterator: pubsub.asyncIterator.bind(pubsub),
+    asyncIterator: pubsub.asyncIterator,
     subscribe: pubsub.subscribe.bind(pubsub),
     unsubscribe: pubsub.unsubscribe.bind(pubsub),
     async publish(triggerName: string, payload: any) {

@@ -10,6 +10,7 @@ import {
 import {
   buildSchemaFromTypeDefinitions,
   IResolvers,
+  makeExecutableSchema,
   PubSub,
   PubSubEngine,
 } from "apollo-server-express";
@@ -43,6 +44,8 @@ import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
 } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 import { GraphqlWsOverWebSocketOverHttpStorageCleaner } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
+import { IStoredPubSubSubscription } from "./PubsubSubscriptionStorage";
+import { SubscriptionStoragePubSubMixin } from "./SubscriptionStoragePubSubMixin";
 
 interface ISubscriptionsListener {
   /** called on subscription start */
@@ -62,6 +65,8 @@ interface IGraphqlHttpAppOptions {
       pubsub: PubSubEngine;
     }): IResolvers;
   };
+  /** table that will store information about PubSubEngine subscriptions */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
   /** Object that will be called base on subscription connect/disconnect */
   subscriptionListener?: ISubscriptionsListener;
   /** table in which to store graphql-ws Subscriptions */
@@ -79,28 +84,40 @@ interface IGraphqlHttpAppOptions {
 
 const WsOverHttpGraphqlHttpApp = (options: IGraphqlHttpAppOptions) => {
   const { subscriptionListener } = options;
-  const schema = buildSchemaFromTypeDefinitions(options.graphql.typeDefs);
-  const pubsub = EpcpPubSubMixin({
-    epcpPublishForPubSubEnginePublish:
-      options.webSocketOverHttp.epcpPublishForPubSubEnginePublish,
-    grip: {
-      url: process.env.GRIP_URL || "http://localhost:5561",
-    },
-    schema,
-  })(new PubSub());
+  const schemaWithoutResolvers = buildSchemaFromTypeDefinitions(
+    options.graphql.typeDefs,
+  );
+  const pubsub = SubscriptionStoragePubSubMixin({
+    pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
+  })(
+    EpcpPubSubMixin({
+      epcpPublishForPubSubEnginePublish:
+        options.webSocketOverHttp.epcpPublishForPubSubEnginePublish,
+      grip: {
+        url: process.env.GRIP_URL || "http://localhost:5561",
+      },
+      schema: schemaWithoutResolvers,
+    })(new PubSub()),
+  );
+  const resolvers = options.graphql.getResolvers({ pubsub });
+  const schema = makeExecutableSchema({
+    resolvers,
+    typeDefs: options.graphql.typeDefs,
+  });
   const expressApplication = express().use(
     GraphqlWsOverWebSocketOverHttpExpressMiddleware({
       connectionStorage: options.connectionStorage,
       getGripChannel: options.webSocketOverHttp.getGripChannel,
       onSubscriptionStart:
         subscriptionListener && subscriptionListener.onConnect,
+      schema,
       subscriptionStorage: options.subscriptionStorage,
     }),
   );
   const graphqlPath = "/";
   const subscriptionsPath = "/";
   const apolloServer = new ApolloServer({
-    resolvers: options.graphql.getResolvers({ pubsub }),
+    resolvers,
     subscriptions: {
       onConnect: subscriptionListener && subscriptionListener.onConnect,
       path: subscriptionsPath,
@@ -144,6 +161,7 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
         getResolvers: ({ pubsub }) => SimpleGraphqlApi({ pubsub }).resolvers,
         typeDefs: SimpleGraphqlApi().typeDefs,
       },
+      pubSubSubscriptionStorage: MapSimpleTable(),
       subscriptionListener: { onConnect: onSubscriptionConnection },
       subscriptionStorage,
       webSocketOverHttp: {
@@ -201,6 +219,9 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
     ] = ChangingValue();
     const subscriptionStorage = MapSimpleTable<IGraphqlSubscription>();
     const connectionStorage = MapSimpleTable<IStoredConnection>();
+    const pubSubSubscriptionStorage = MapSimpleTable<
+      IStoredPubSubSubscription
+    >();
     const graphqlSchema = buildSchemaFromTypeDefinitions(
       SimpleGraphqlApi().typeDefs,
     );
@@ -210,6 +231,7 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
         getResolvers: ({ pubsub }) => SimpleGraphqlApi({ pubsub }).resolvers,
         typeDefs: SimpleGraphqlApi().typeDefs,
       },
+      pubSubSubscriptionStorage,
       subscriptionListener: { onConnect: onSubscriptionConnection },
       subscriptionStorage,
       webSocketOverHttp: {
@@ -235,6 +257,8 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       Expect(storedConnectionsAfterSubscription.length).toEqual(1);
       const storedSubscriptionsAfterSubscription = await subscriptionStorage.scan();
       Expect(storedSubscriptionsAfterSubscription.length).toEqual(1);
+      const storedPubSubSubscriptionsAfterSubscription = await pubSubSubscriptionStorage.scan();
+      Expect(storedPubSubSubscriptionsAfterSubscription.length).toEqual(1);
 
       // Now let's make a mutation that should result in a message coming from the subscription
       const postToAdd = {

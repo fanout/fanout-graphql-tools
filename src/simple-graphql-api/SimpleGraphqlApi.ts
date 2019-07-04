@@ -14,6 +14,9 @@ import {
   isGraphqlWsStartMessage,
 } from "../subscriptions-transport-ws-over-http/GraphqlWebSocketOverHttpConnectionListener";
 import { gripChannelForSubscriptionWithoutArguments } from "../subscriptions-transport-ws-over-http/GraphqlWsGripChannelNamers";
+import { IWebSocketOverHttpGraphqlSubscriptionContext } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpGraphqlContext";
+import { IContextForPublishingWithEpcp } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpGraphqlContext";
+import { WebSocketOverHttpPubsubMixin } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpPubsubMixin";
 
 interface IPost {
   /** post author */
@@ -117,10 +120,17 @@ export const SimpleGraphqlApi = ({
   `;
   const resolvers = {
     Mutation: {
-      addPost(root: any, args: any, context: any) {
-        pubsub.publish(SimpleGraphqlApiPubSubTopic.POST_ADDED, {
-          postAdded: args,
-        });
+      async addPost(
+        root: any,
+        args: any,
+        context: IContextForPublishingWithEpcp,
+      ) {
+        await WebSocketOverHttpPubsubMixin(context)(pubsub).publish(
+          SimpleGraphqlApiPubSubTopic.POST_ADDED,
+          {
+            postAdded: args,
+          },
+        );
         return postController.addPost(args);
       },
     },
@@ -132,8 +142,14 @@ export const SimpleGraphqlApi = ({
     Subscription: {
       postAdded: {
         // Additional event labels can be passed to asyncIterator creation
-        subscribe: () => {
-          return pubsub.asyncIterator([SimpleGraphqlApiPubSubTopic.POST_ADDED]);
+        subscribe(
+          rootValue: any,
+          args: object,
+          context: IWebSocketOverHttpGraphqlSubscriptionContext,
+        ) {
+          return WebSocketOverHttpPubsubMixin(context)(pubsub).asyncIterator([
+            SimpleGraphqlApiPubSubTopic.POST_ADDED,
+          ]);
         },
       },
     },

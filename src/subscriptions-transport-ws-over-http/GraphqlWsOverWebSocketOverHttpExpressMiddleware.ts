@@ -23,6 +23,8 @@ import GraphqlWebSocketOverHttpConnectionListener, {
   isGraphqlWsStopMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
 import { cleanupStorageAfterConnection } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
+import { IStoredPubSubSubscription } from "./PubsubSubscriptionStorage";
+import { IWebSocketOverHttpGraphqlSubscriptionContext } from "./WebSocketOverHttpGraphqlContext";
 
 interface ISubscriptionStoringMessageHandlerOptions {
   /** WebSocket Connection Info */
@@ -139,6 +141,8 @@ const ExecuteGraphqlWsSubscriptionsMessageHandler = (options: {
     /** info aobut the ws-over-http connection */
     connection: IWebSocketOverHTTPConnectionInfo;
   };
+  /** table to store PubSub subscription info in */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
   /** graphql resolver root value */
   rootValue?: any;
   /** graphql schema to evaluate subscriptions against */
@@ -146,7 +150,7 @@ const ExecuteGraphqlWsSubscriptionsMessageHandler = (options: {
 }) => async (message: string) => {
   const graphqlWsEvent = JSON.parse(message);
   const operation = graphqlWsEvent && graphqlWsEvent.payload;
-  if (!(graphqlWsEvent && graphqlWsEvent.type === "start" && operation)) {
+  if (!(isGraphqlWsStartMessage(graphqlWsEvent) && operation)) {
     // not a graphql-ws subscription start. Do nothing
     return;
   }
@@ -160,9 +164,16 @@ const ExecuteGraphqlWsSubscriptionsMessageHandler = (options: {
     // not a subscription. do nothing
     return;
   }
-  const contextValue = {
+  const contextValue: IWebSocketOverHttpGraphqlSubscriptionContext = {
     webSocketOverHttp: {
       connection: options.webSocketOverHttp.connection,
+      graphql: {
+        schema: options.schema,
+      },
+      graphqlWs: {
+        startMessage: graphqlWsEvent,
+      },
+      pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
     },
   };
   const subscriptionAsyncIterator = await graphql.subscribe({
@@ -316,6 +327,8 @@ const ConnectionStoringConnectionListener = (options: {
 interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
   /** table to store information about each ws-over-http connection */
   connectionStorage: ISimpleTable<IStoredConnection>;
+  /** table to store PubSub subscription info in */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
   /** graphql schema */
   schema: graphql.GraphQLSchema;
   /** table to store information about each Graphql Subscription */

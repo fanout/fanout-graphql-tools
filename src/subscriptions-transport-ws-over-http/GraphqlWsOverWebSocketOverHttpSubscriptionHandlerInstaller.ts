@@ -7,10 +7,13 @@ import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionList
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
 } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
+import { IStoredPubSubSubscription } from "./PubsubSubscriptionStorage";
 
 interface IGraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstallerOptions {
   /** table to store information about each ws-over-http connection */
   connectionStorage: ISimpleTable<IStoredConnection>;
+  /** table to store PubSub subscription info in */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
   /** GraphQL Schema including resolvers */
   schema: GraphQLSchema;
   /** table to store information about each Graphql Subscription */

@@ -38,6 +38,7 @@ import { ChangingValue } from "../testing-tools/ChangingValue";
 import { itemsFromLinkObservable } from "../testing-tools/itemsFromLinkObservable";
 import WebSocketApolloClient from "../testing-tools/WebSocketApolloClient";
 import { withListeningServer } from "../testing-tools/withListeningServer";
+import { EpcpSubscriptionPublisher } from "./EpcpSubscriptionPublisher";
 import { IGraphqlSubscription } from "./GraphqlSubscription";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
@@ -46,6 +47,10 @@ import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
 import { GraphqlWsOverWebSocketOverHttpStorageCleaner } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
 import { IStoredPubSubSubscription } from "./PubsubSubscriptionStorage";
 import { SubscriptionStoragePubSubMixin } from "./SubscriptionStoragePubSubMixin";
+import {
+  IContextForPublishingWithEpcp,
+  WebSocketOverHttpContextFunction,
+} from "./WebSocketOverHttpGraphqlContext";
 
 interface ISubscriptionsListener {
   /** called on subscription start */
@@ -84,21 +89,7 @@ interface IGraphqlHttpAppOptions {
 
 const WsOverHttpGraphqlHttpApp = (options: IGraphqlHttpAppOptions) => {
   const { subscriptionListener } = options;
-  const schemaWithoutResolvers = buildSchemaFromTypeDefinitions(
-    options.graphql.typeDefs,
-  );
-  const pubsub = SubscriptionStoragePubSubMixin({
-    pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
-  })(
-    EpcpPubSubMixin({
-      epcpPublishForPubSubEnginePublish:
-        options.webSocketOverHttp.epcpPublishForPubSubEnginePublish,
-      grip: {
-        url: process.env.GRIP_URL || "http://localhost:5561",
-      },
-      schema: schemaWithoutResolvers,
-    })(new PubSub()),
-  );
+  const pubsub = new PubSub();
   const resolvers = options.graphql.getResolvers({ pubsub });
   const schema = makeExecutableSchema({
     resolvers,
@@ -110,6 +101,7 @@ const WsOverHttpGraphqlHttpApp = (options: IGraphqlHttpAppOptions) => {
       getGripChannel: options.webSocketOverHttp.getGripChannel,
       onSubscriptionStart:
         subscriptionListener && subscriptionListener.onConnect,
+      pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
       schema,
       subscriptionStorage: options.subscriptionStorage,
     }),
@@ -117,6 +109,14 @@ const WsOverHttpGraphqlHttpApp = (options: IGraphqlHttpAppOptions) => {
   const graphqlPath = "/";
   const subscriptionsPath = "/";
   const apolloServer = new ApolloServer({
+    context: WebSocketOverHttpContextFunction({
+      grip: {
+        getGripChannel: options.webSocketOverHttp.getGripChannel,
+        url: process.env.GRIP_URL || "http://localhost:5561",
+      },
+      pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
+      schema,
+    }),
     resolvers,
     subscriptions: {
       onConnect: subscriptionListener && subscriptionListener.onConnect,

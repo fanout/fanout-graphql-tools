@@ -116,22 +116,6 @@ const SubscriptionDeletingMessageHandler = (
   );
 };
 
-/** Create a function that will cleanup after a collection by removing that connection's subscriptions in a ISimpleTable<GraphqlSubscription> */
-const SubscriptionStorageConnectionCleanup = (
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>,
-) => async (connection: IWebSocketOverHTTPConnectionInfo): Promise<void> => {
-  const subscriptionsForConnection = await filterTable(
-    subscriptionStorage,
-    subscription => subscription.connectionId === connection.id,
-  );
-  await Promise.all(
-    subscriptionsForConnection.map(subscription =>
-      subscriptionStorage.delete(subscription),
-    ),
-  );
-  return;
-};
-
 /** Message handler that will properly handle graphql-ws subscription operations
  * by calling `subscribe` export of `graphql` package
  */
@@ -362,9 +346,12 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
       /** This connectionListener will respond to graphql-ws messages in a way that accepts all incoming subscriptions */
       const graphqlWsConnectionListener = GraphqlWebSocketOverHttpConnectionListener(
         {
-          cleanupConnection: SubscriptionStorageConnectionCleanup(
-            options.subscriptionStorage,
-          ),
+          async cleanupConnection(conn) {
+            await cleanupStorageAfterConnection({
+              ...options,
+              connection: conn,
+            });
+          },
           connection,
           getMessageResponse: AcceptAllGraphqlSubscriptionsMessageHandler(),
           webSocketOverHttp: {

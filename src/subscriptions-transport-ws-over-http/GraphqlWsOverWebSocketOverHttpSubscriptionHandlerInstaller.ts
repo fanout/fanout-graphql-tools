@@ -2,7 +2,6 @@ import * as express from "express";
 import { GraphQLSchema } from "graphql";
 import * as http from "http";
 import { ISimpleTable } from "../simple-table/SimpleTable";
-import { IGraphqlSubscription } from "./GraphqlSubscription";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
@@ -16,8 +15,6 @@ interface IGraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstallerOptions {
   pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
   /** GraphQL Schema including resolvers */
   schema: GraphQLSchema;
-  /** table to store information about each Graphql Subscription */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
   /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
   getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
 }

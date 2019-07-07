@@ -65,7 +65,6 @@ export const SubscriptionStoragePubSubMixin = (options: {
   /** table to store PubSub subscription info in */
   pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
 }) => (pubsub: PubSubEngine) => {
-  console.log("in SubscriptionStoragePubSubMixin");
   // defer to pubsub.subscribe, but also store the subscription
   const subscribe: PubSubEngine["subscribe"] = async (
     triggerName,

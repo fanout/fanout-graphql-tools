@@ -1,5 +1,4 @@
 import { ISimpleTable } from "../simple-table/SimpleTable";
-import { IGraphqlSubscription } from "./GraphqlSubscription";
 import { IStoredConnection } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 
@@ -8,8 +7,6 @@ export interface IGraphqlWsOverWebSocketOverHttpStorageCleanerOptions {
   connectionStorage: ISimpleTable<IStoredConnection>;
   /** table to store PubSub subscription info in */
   pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
-  /** table to store information about each Graphql Subscription */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
 }
 
 /**
@@ -60,8 +57,6 @@ export const GraphqlWsOverWebSocketOverHttpStorageCleaner = (
 export const cleanupStorageAfterConnection = async (options: {
   /** table to store information about each ws-over-http connection */
   connectionStorage: ISimpleTable<IStoredConnection>;
-  /** table to store information about each Graphql Subscription */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
   /** table to store info about each PubSub subscription created by graphql subscription resolvers */
   pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
   /** connection to cleanup */
@@ -72,9 +67,6 @@ export const cleanupStorageAfterConnection = async (options: {
 }) => {
   const { connection } = options;
   // Delete all subscriptions for connection
-  await deleteSubscriptionsForConnection(options.subscriptionStorage, {
-    id: connection.id,
-  });
   await deletePubSubSubscriptionsForConnection(
     options.pubSubSubscriptionStorage,
     connection,
@@ -82,29 +74,6 @@ export const cleanupStorageAfterConnection = async (options: {
   // and delete the connection itself
   await options.connectionStorage.delete({ id: connection.id });
 };
-
-/**
- * Delete all the subscriptions from subscriptionStorage that have subscription.connectionId equal to the provided connectionQuery.id
- */
-async function deleteSubscriptionsForConnection(
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>,
-  connectionQuery: {
-    /** Connection ID whose corresponding subscriptions should be deleted */
-    id: string;
-  },
-): Promise<void> {
-  await subscriptionStorage.scan(async subscriptions => {
-    await Promise.all(
-      subscriptions.map(async subscription => {
-        if (subscription.connectionId === connectionQuery.id) {
-          // This subscription is for the provided connection.id. Delete it.
-          await subscriptionStorage.delete({ id: subscription.id });
-        }
-      }),
-    );
-    return true;
-  });
-}
 
 /**
  * Delete all the stored PubSub subscriptions from pubSubSubscriptionStorage that were created for the provided connectionId

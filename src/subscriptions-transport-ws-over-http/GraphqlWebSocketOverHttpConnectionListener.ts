@@ -69,6 +69,17 @@ export const isGraphqlWsStartMessage = (
   );
 };
 
+/** Given a JSON string that should be a graphql-ws start message, return a parsed object of it, or throw if inalid */
+export const parseGraphqlWsStartMessage = (
+  jsonString: string,
+): IGraphqlWsStartMessage => {
+  const startMessage = JSON.parse(jsonString);
+  if (!isGraphqlWsStartMessage(startMessage)) {
+    throw new Error(`invalid graphql-ws start message: ${jsonString}`);
+  }
+  return startMessage;
+};
+
 /** https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md#gql_stop */
 export interface IGraphqlWsStopMessage {
   /** Subscription Operation ID */

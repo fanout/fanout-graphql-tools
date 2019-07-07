@@ -1,18 +1,6 @@
 import { PubSub, PubSubEngine } from "apollo-server";
-import { GraphQLSchema } from "graphql";
 import gql from "graphql-tag";
-import {
-  IEpcpPublish,
-  IPubSubEnginePublish,
-  returnTypeNameForSubscriptionFieldName,
-} from "../graphql-epcp-pubsub/EpcpPubSubMixin";
-import { filterTable, ISimpleTable } from "../simple-table/SimpleTable";
-import { IGraphqlSubscription } from "../subscriptions-transport-ws-over-http/GraphqlSubscription";
-import {
-  getSubscriptionOperationFieldName,
-  IGraphqlWsStartMessage,
-  isGraphqlWsStartMessage,
-} from "../subscriptions-transport-ws-over-http/GraphqlWebSocketOverHttpConnectionListener";
+import { IGraphqlWsStartMessage } from "../subscriptions-transport-ws-over-http/GraphqlWebSocketOverHttpConnectionListener";
 import { gripChannelForSubscriptionWithoutArguments } from "../subscriptions-transport-ws-over-http/GraphqlWsGripChannelNamers";
 import { IWebSocketOverHttpGraphqlSubscriptionContext } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpGraphqlContext";
 import { IContextForPublishingWithEpcp } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpGraphqlContext";
@@ -166,87 +154,3 @@ export const SimpleGraphqlApiGripChannelNamer = () => (
 ): string => {
   return gripChannelForSubscriptionWithoutArguments(gqlWsStartMessage);
 };
-
-type PubSubEngineEpcpPublisher = (
-  publish: IPubSubEnginePublish,
-) => Promise<IEpcpPublish[]>;
-
-/**
- * Convert SimpleGraphqlApi PubSubEngine publishes to EPCP Publishes that should be sent to a GRIP server.
- */
-export const SimpleGraphqlApiEpcpPublisher = (options: {
-  /** GraphQL Schema */
-  graphqlSchema: GraphQLSchema;
-  /** storage table for graphql-ws subscriptions */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
-}): PubSubEngineEpcpPublisher => async (
-  pubsubEnginePublish: IPubSubEnginePublish,
-) => {
-  switch (pubsubEnginePublish.triggerName) {
-    case SimpleGraphqlApiPubSubTopic.POST_ADDED:
-      const postAddedSubscriptions = await filterTable(
-        options.subscriptionStorage,
-        (subscription: IGraphqlSubscription) =>
-          subscription.subscriptionFieldName === "postAdded",
-      );
-      // get a start message from one of the subscriptions
-      const getStartMessageSample = () => {
-        const subscription = postAddedSubscriptions[0];
-        const startMessageSample =
-          subscription && JSON.parse(subscription.startMessage);
-        if (!isGraphqlWsStartMessage(startMessageSample)) {
-          throw new Error(
-            `Could not get sample startMessage, got ${startMessageSample}`,
-          );
-        }
-        return startMessageSample;
-      };
-      const epcpPublishes: IEpcpPublish[] = postAddedSubscriptions
-        .map(s => s.operationId)
-        .reduce(uniqueReducer, [] as string[])
-        .map(operationId => {
-          const startMessageBase = getStartMessageSample();
-          const subscriptionFieldName = getSubscriptionOperationFieldName(
-            startMessageBase.payload,
-          );
-          const epcpPublish: IEpcpPublish = {
-            channel: SimpleGraphqlApiGripChannelNamer()({
-              ...startMessageBase,
-              id: operationId,
-            }),
-            message: JSON.stringify({
-              id: operationId,
-              payload: {
-                data: {
-                  [subscriptionFieldName]: {
-                    __typename: returnTypeNameForSubscriptionFieldName(
-                      options.graphqlSchema,
-                      subscriptionFieldName,
-                    ),
-                    ...pubsubEnginePublish.payload[subscriptionFieldName],
-                  },
-                },
-              },
-              type: "data",
-            }),
-          };
-          return epcpPublish;
-        });
-
-      return epcpPublishes;
-  }
-  throw new Error(
-    `SimpleGraphqlApiEpcpPublisher got unexpected PubSubEngine triggerName ${pubsubEnginePublish.triggerName} `,
-  );
-};
-
-/** Array reducer that returns an array of the unique items of the reduced array */
-function uniqueReducer<Item>(prev: Item[] | Item, curr: Item): Item[] {
-  if (!Array.isArray(prev)) {
-    prev = [prev];
-  }
-  if (prev.indexOf(curr) === -1) {
-    prev.push(curr);
-  }
-  return prev;
-}

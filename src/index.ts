@@ -17,7 +17,6 @@ export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOver
 export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpRequestListener";
 export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpStorageCleaner";
 export * from "./subscriptions-transport-ws-over-http/GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller";
-export * from "./subscriptions-transport-ws-over-http/GraphqlSubscription";
 export * from "./subscriptions-transport-ws-over-http/PubSubSubscriptionStorage";
 export * from "./subscriptions-transport-ws-over-http/WebSocketOverHttpPubSubMixin";
 export * from "./subscriptions-transport-ws-over-http/WebSocketOverHttpGraphqlContext";

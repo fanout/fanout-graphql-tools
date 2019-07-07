@@ -3,9 +3,7 @@ import {
   Expect,
   FocusTest,
   IgnoreTest,
-  TestCase,
   TestFixture,
-  Timeout,
 } from "alsatian";
 import {
   buildSchemaFromTypeDefinitions,
@@ -17,7 +15,6 @@ import {
 import { ApolloServer } from "apollo-server-express";
 import * as express from "express";
 import { DocumentNode } from "graphql";
-import gql from "graphql-tag";
 import * as http from "http";
 import * as urlModule from "url";
 import {
@@ -32,18 +29,13 @@ import { ChangingValue } from "../testing-tools/ChangingValue";
 import { itemsFromLinkObservable } from "../testing-tools/itemsFromLinkObservable";
 import WebSocketApolloClient from "../testing-tools/WebSocketApolloClient";
 import { withListeningServer } from "../testing-tools/withListeningServer";
-import { EpcpSubscriptionPublisher } from "./EpcpSubscriptionPublisher";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
 } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 import { GraphqlWsOverWebSocketOverHttpStorageCleaner } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
-import { SubscriptionStoragePubSubMixin } from "./SubscriptionStoragePubSubMixin";
-import {
-  IContextForPublishingWithEpcp,
-  WebSocketOverHttpContextFunction,
-} from "./WebSocketOverHttpGraphqlContext";
+import { WebSocketOverHttpContextFunction } from "./WebSocketOverHttpGraphqlContext";
 
 interface ISubscriptionsListener {
   /** called on subscription start */

@@ -2,7 +2,6 @@ import * as assert from "assert";
 import * as express from "express";
 import * as graphql from "graphql";
 import { WebSocketEvent } from "grip";
-import { v4 as uuidv4 } from "uuid";
 import { default as AcceptAllGraphqlSubscriptionsMessageHandler } from "../graphql-ws/AcceptAllGraphqlSubscriptionsMessageHandler";
 import { filterTable, ISimpleTable } from "../simple-table/SimpleTable";
 import {
@@ -14,7 +13,6 @@ import WebSocketOverHttpExpress, {
   IWebSocketOverHTTPConnectionInfo,
 } from "../websocket-over-http-express/WebSocketOverHttpExpress";
 import GraphqlWebSocketOverHttpConnectionListener, {
-  getSubscriptionOperationFieldName,
   IGraphqlWsStartMessage,
   IGraphqlWsStopMessage,
   isGraphqlWsStartMessage,

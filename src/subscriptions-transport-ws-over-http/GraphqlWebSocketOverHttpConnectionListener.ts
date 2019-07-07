@@ -1,6 +1,5 @@
 import { getMainDefinition } from "apollo-utilities";
 import gql from "graphql-tag";
-import * as grip from "grip";
 import { IConnectionListener } from "../websocket-over-http-express/WebSocketOverHttpConnectionListener";
 import { IWebSocketOverHTTPConnectionInfo } from "../websocket-over-http-express/WebSocketOverHttpExpress";
 

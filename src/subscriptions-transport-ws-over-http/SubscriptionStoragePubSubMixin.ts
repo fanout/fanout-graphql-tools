@@ -3,7 +3,6 @@ import * as graphql from "graphql";
 import { createAsyncIterator, isAsyncIterable } from "iterall";
 import { v4 as uuidv4 } from "uuid";
 import { ISimpleTable } from "../simple-table/SimpleTable";
-import { IWebSocketOverHTTPConnectionInfo } from "../websocket-over-http-express/WebSocketOverHttpExpress";
 import {
   IGraphqlWsStartMessage,
   isGraphqlWsStartMessage,

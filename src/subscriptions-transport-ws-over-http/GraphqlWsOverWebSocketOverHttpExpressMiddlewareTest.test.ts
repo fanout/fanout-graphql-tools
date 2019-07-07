@@ -45,7 +45,7 @@ import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
 } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 import { GraphqlWsOverWebSocketOverHttpStorageCleaner } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
-import { IStoredPubSubSubscription } from "./PubsubSubscriptionStorage";
+import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 import { SubscriptionStoragePubSubMixin } from "./SubscriptionStoragePubSubMixin";
 import {
   IContextForPublishingWithEpcp,
@@ -152,6 +152,9 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       latestSubscriptionChanged,
     ] = ChangingValue();
     const subscriptionStorage = MapSimpleTable<IGraphqlSubscription>();
+    const pubSubSubscriptionStorage = MapSimpleTable<
+      IStoredPubSubSubscription
+    >();
     const graphqlSchema = buildSchemaFromTypeDefinitions(
       SimpleGraphqlApi().typeDefs,
     );
@@ -161,7 +164,7 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
         getResolvers: ({ pubsub }) => SimpleGraphqlApi({ pubsub }).resolvers,
         typeDefs: SimpleGraphqlApi().typeDefs,
       },
-      pubSubSubscriptionStorage: MapSimpleTable(),
+      pubSubSubscriptionStorage,
       subscriptionListener: { onConnect: onSubscriptionConnection },
       subscriptionStorage,
       webSocketOverHttp: {
@@ -277,13 +280,14 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       );
 
       // Now we want to make sure it's possible to clean up records from storage once they have expired due to inactivity
-      const cleanUpStorage = await GraphqlWsOverWebSocketOverHttpStorageCleaner(
-        {
-          connectionStorage,
-          subscriptionStorage,
-        },
-      );
+      const cleanUpStorage = GraphqlWsOverWebSocketOverHttpStorageCleaner({
+        connectionStorage,
+        pubSubSubscriptionStorage,
+        subscriptionStorage,
+      });
       // first try a cleanup right now. Right after creating the connection and subscription. It should not result in any deleted rows because it's too soon. They haven't expired yet.
+      const pubSubSubscriptionsAfterEarlyCleanup = await pubSubSubscriptionStorage.scan();
+      Expect(pubSubSubscriptionsAfterEarlyCleanup.length).toEqual(1);
       const subscriptionsAfterEarlyCleanup = await subscriptionStorage.scan();
       Expect(subscriptionsAfterEarlyCleanup.length).toEqual(1);
       const connectionsAfterEarlyCleanup = await connectionStorage.scan();
@@ -292,14 +296,18 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       // Five minutes from now - At this point they should be expired
       const simulateCleanupAtDate = (() => {
         return new Date(
-          Date.parse(connectionsAfterEarlyCleanup[0].expiresAt) + 1,
+          Date.parse(connectionsAfterEarlyCleanup[0].expiresAt) + 1000,
         );
       })();
       await cleanUpStorage(simulateCleanupAtDate);
-      const subscriptionsAfterCleanup = await subscriptionStorage.scan();
-      const connectionsAfterCleanup = await connectionStorage.scan();
-      Expect(subscriptionsAfterCleanup.length).toEqual(0);
-      Expect(connectionsAfterCleanup.length).toEqual(0);
+      const afterCleanup = {
+        connections: await connectionStorage.scan(),
+        pubSubSubscriptions: await pubSubSubscriptionStorage.scan(),
+        subscriptions: await subscriptionStorage.scan(),
+      };
+      Expect(afterCleanup.subscriptions.length).toEqual(0);
+      Expect(afterCleanup.pubSubSubscriptions.length).toEqual(0);
+      Expect(afterCleanup.connections.length).toEqual(0);
     });
     return;
   }

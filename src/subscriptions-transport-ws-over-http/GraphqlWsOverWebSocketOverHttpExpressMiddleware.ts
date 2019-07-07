@@ -23,7 +23,7 @@ import GraphqlWebSocketOverHttpConnectionListener, {
   isGraphqlWsStopMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
 import { cleanupStorageAfterConnection } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
-import { IStoredPubSubSubscription } from "./PubsubSubscriptionStorage";
+import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 import { IWebSocketOverHttpGraphqlSubscriptionContext } from "./WebSocketOverHttpGraphqlContext";
 
 interface ISubscriptionStoringMessageHandlerOptions {
@@ -223,6 +223,8 @@ const ConnectionStoringConnectionListener = (options: {
   connectionStorage: ISimpleTable<IStoredConnection>;
   /** how often to ask ws-over-http gateway to make keepalive requests */
   keepAliveIntervalSeconds: number;
+  /** table to store PubSub subscription info in */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
   /** table where subscriptions are stored. Needed to cleanup after connections */
   subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
 }): IConnectionListener => {
@@ -252,6 +254,7 @@ const ConnectionStoringConnectionListener = (options: {
     await cleanupStorageAfterConnection({
       connection: { id: options.connection.id },
       connectionStorage: options.connectionStorage,
+      pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
       subscriptionStorage: options.subscriptionStorage,
     });
   };
@@ -456,6 +459,7 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
           connection,
           connectionStorage,
           keepAliveIntervalSeconds,
+          pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
           subscriptionStorage,
         }),
         {

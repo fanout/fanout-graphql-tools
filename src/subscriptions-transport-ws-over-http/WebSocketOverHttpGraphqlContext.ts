@@ -2,7 +2,7 @@ import { GraphQLSchema } from "graphql";
 import { ISimpleTable } from "../simple-table/SimpleTable";
 import { EpcpSubscriptionPublisher } from "./EpcpSubscriptionPublisher";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
-import { IStoredPubSubSubscription } from "./PubsubSubscriptionStorage";
+import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 
 /** Interface for graphql server context when the request is coming via graphql-ws over websocket-over-http */
 export interface IContextForPublishingWithEpcp {

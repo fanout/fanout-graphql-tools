@@ -9,7 +9,7 @@ import {
   IGraphqlWsStartMessage,
   isGraphqlWsStartMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
-import { IStoredPubSubSubscription } from "./PubsubSubscriptionStorage";
+import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 
 export interface ISubscriptionTestPubSub {
   /** return an asyncIterator of the provided triggerName publishes */

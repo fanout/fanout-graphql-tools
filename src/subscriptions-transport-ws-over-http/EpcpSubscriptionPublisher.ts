@@ -5,7 +5,7 @@ import {
   IGraphqlWsStartMessage,
   isGraphqlWsStartMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
-import { IStoredPubSubSubscription } from "./PubsubSubscriptionStorage";
+import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 
 export type ISubscriptionPublisher = (
   subscription: IStoredPubSubSubscription,

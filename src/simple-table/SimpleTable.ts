@@ -48,7 +48,7 @@ export const MapSimpleTable = <Entity extends IHasId>(
   async function scan(callback?: ScanCallback) {
     if (callback) {
       for (const e of map.values()) {
-        callback([e]);
+        await callback([e]);
       }
       return;
     } else {

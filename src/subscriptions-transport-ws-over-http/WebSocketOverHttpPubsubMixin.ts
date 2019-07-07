@@ -13,7 +13,7 @@ import {
  * Given graphql resolver context, return a PubSub mixin that will do what is needed
  * to enable subscriptions over ws-over-http
  */
-export const WebSocketOverHttpPubsubMixin = (
+export const WebSocketOverHttpPubSubMixin = (
   context:
     | IWebSocketOverHttpGraphqlSubscriptionContext
     | IContextForPublishingWithEpcp

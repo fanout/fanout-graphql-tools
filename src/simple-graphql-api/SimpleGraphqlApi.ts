@@ -16,7 +16,7 @@ import {
 import { gripChannelForSubscriptionWithoutArguments } from "../subscriptions-transport-ws-over-http/GraphqlWsGripChannelNamers";
 import { IWebSocketOverHttpGraphqlSubscriptionContext } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpGraphqlContext";
 import { IContextForPublishingWithEpcp } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpGraphqlContext";
-import { WebSocketOverHttpPubsubMixin } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpPubsubMixin";
+import { WebSocketOverHttpPubSubMixin } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpPubSubMixin";
 
 interface IPost {
   /** post author */
@@ -125,7 +125,7 @@ export const SimpleGraphqlApi = ({
         args: any,
         context: IContextForPublishingWithEpcp,
       ) {
-        await WebSocketOverHttpPubsubMixin(context)(pubsub).publish(
+        await WebSocketOverHttpPubSubMixin(context)(pubsub).publish(
           SimpleGraphqlApiPubSubTopic.POST_ADDED,
           {
             postAdded: args,
@@ -147,7 +147,7 @@ export const SimpleGraphqlApi = ({
           args: object,
           context: IWebSocketOverHttpGraphqlSubscriptionContext,
         ) {
-          return WebSocketOverHttpPubsubMixin(context)(pubsub).asyncIterator([
+          return WebSocketOverHttpPubSubMixin(context)(pubsub).asyncIterator([
             SimpleGraphqlApiPubSubTopic.POST_ADDED,
           ]);
         },

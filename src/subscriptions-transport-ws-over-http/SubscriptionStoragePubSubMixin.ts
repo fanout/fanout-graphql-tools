@@ -2,7 +2,6 @@ import { PubSub, PubSubEngine } from "apollo-server";
 import * as graphql from "graphql";
 import { createAsyncIterator, isAsyncIterable } from "iterall";
 import { v4 as uuidv4 } from "uuid";
-import { IPubSubEnginePublish } from "../graphql-epcp-pubsub/EpcpPubSubMixin";
 import { ISimpleTable } from "../simple-table/SimpleTable";
 import { IWebSocketOverHTTPConnectionInfo } from "../websocket-over-http-express/WebSocketOverHttpExpress";
 import {
@@ -10,6 +9,13 @@ import {
   isGraphqlWsStartMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
+
+interface IPubSubEnginePublish {
+  /** publish trigger name as string */
+  triggerName: string;
+  /** payload passed for this triggered publish */
+  payload: any;
+}
 
 export interface ISubscriptionTestPubSub {
   /** return an asyncIterator of the provided triggerName publishes */

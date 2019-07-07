@@ -45,9 +45,7 @@ export const EpcpSubscriptionPublisher = (options: {
     await new Promise((resolve, reject) => {
       gripPubControl.publish(
         gripChannelName,
-        new pubcontrol.Item(
-          new grip.WebSocketMessageFormat(dataMessageString),
-        ),
+        new pubcontrol.Item(new grip.WebSocketMessageFormat(dataMessageString)),
         (success, error, context) => {
           console.log(
             `gripPubControl callback channel=${gripChannelName} success=${success} error=${error} context=${context} message=${dataMessageString}`,

@@ -21,11 +21,6 @@ import gql from "graphql-tag";
 import * as http from "http";
 import * as urlModule from "url";
 import {
-  EpcpPubSubMixin,
-  IEpcpPublish,
-  IPubSubEnginePublish,
-} from "../graphql-epcp-pubsub/EpcpPubSubMixin";
-import {
   SimpleGraphqlApi,
   SimpleGraphqlApiGripChannelNamer,
   SimpleGraphqlApiMutations,

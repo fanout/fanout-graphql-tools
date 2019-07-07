@@ -6,8 +6,6 @@ export {
 } from "./graphql-ws/AcceptAllGraphqlSubscriptionsMessageHandler";
 export * from "./graphql-ws/GraphqlQueryTools";
 
-export * from "./graphql-epcp-pubsub/EpcpPubSubMixin";
-
 export * from "./simple-table/SimpleTable";
 
 export * from "./subscriptions-transport-apollo/ApolloSubscriptionServerOptions";

@@ -3,7 +3,6 @@ import * as express from "express";
 import * as graphql from "graphql";
 import { WebSocketEvent } from "grip";
 import { v4 as uuidv4 } from "uuid";
-import { assertNever } from "../graphql-epcp-pubsub/EpcpPubSubMixin";
 import { default as AcceptAllGraphqlSubscriptionsMessageHandler } from "../graphql-ws/AcceptAllGraphqlSubscriptionsMessageHandler";
 import { filterTable, ISimpleTable } from "../simple-table/SimpleTable";
 import {
@@ -283,6 +282,11 @@ const ConnectionStoringConnectionListener = (options: {
     },
   };
 };
+
+/** TypeScript helper for exhaustive switches https://www.typescriptlang.org/docs/handbook/advanced-types.html  */
+function assertNever(x: never): never {
+  throw new Error("Unexpected object: " + x);
+}
 
 interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
   /** table to store information about each ws-over-http connection */

@@ -8,7 +8,7 @@ See [fanout/apollo-demo](https://github.com/fanout/apollo-demo) for an example p
 
 ### Releasing New Versions
 
-Release a new version of this package by pushing a git commit with a name this is a semver version like "v0.0.2".
+Release a new version of this package by pushing a git tag with a name that is a semver version like "v0.0.2".
 Make sure you also update the `package.json` to have the same version.
 
 The best way to do this is using [`npm version <newversion>`](https://docs.npmjs.com/cli/version), which will update `package.json`, then create a git commit, then create a git tag pointing to that git commit. You should run this in the master branch.

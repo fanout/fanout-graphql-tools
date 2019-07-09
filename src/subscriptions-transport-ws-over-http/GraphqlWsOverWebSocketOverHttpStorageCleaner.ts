@@ -1,12 +1,12 @@
 import { ISimpleTable } from "../simple-table/SimpleTable";
-import { IGraphqlSubscription } from "./GraphqlSubscription";
 import { IStoredConnection } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
+import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 
 export interface IGraphqlWsOverWebSocketOverHttpStorageCleanerOptions {
   /** table to store information about each ws-over-http connection */
   connectionStorage: ISimpleTable<IStoredConnection>;
-  /** table to store information about each Graphql Subscription */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
+  /** table to store PubSub subscription info in */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
 }
 
 /**
@@ -39,11 +39,8 @@ export const GraphqlWsOverWebSocketOverHttpStorageCleaner = (
             }
             // connection has expired.
             await cleanupStorageAfterConnection({
-              connection: {
-                id: connection.id,
-              },
-              connectionStorage: options.connectionStorage,
-              subscriptionStorage: options.subscriptionStorage,
+              connection,
+              ...options,
             });
           }),
         );
@@ -60,8 +57,8 @@ export const GraphqlWsOverWebSocketOverHttpStorageCleaner = (
 export const cleanupStorageAfterConnection = async (options: {
   /** table to store information about each ws-over-http connection */
   connectionStorage: ISimpleTable<IStoredConnection>;
-  /** table to store information about each Graphql Subscription */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
+  /** table to store info about each PubSub subscription created by graphql subscription resolvers */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
   /** connection to cleanup */
   connection: {
     /** connection id of connection to cleanup after */
@@ -70,29 +67,30 @@ export const cleanupStorageAfterConnection = async (options: {
 }) => {
   const { connection } = options;
   // Delete all subscriptions for connection
-  await deleteSubscriptionsForConnection(options.subscriptionStorage, {
-    id: connection.id,
-  });
+  await deletePubSubSubscriptionsForConnection(
+    options.pubSubSubscriptionStorage,
+    connection,
+  );
   // and delete the connection itself
   await options.connectionStorage.delete({ id: connection.id });
 };
 
 /**
- * Delete all the subscriptions from subscriptionStorage that have subscription.connectionId equal to the provided connectionQuery.id
+ * Delete all the stored PubSub subscriptions from pubSubSubscriptionStorage that were created for the provided connectionId
  */
-async function deleteSubscriptionsForConnection(
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>,
+async function deletePubSubSubscriptionsForConnection(
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>,
   connectionQuery: {
     /** Connection ID whose corresponding subscriptions should be deleted */
     id: string;
   },
-): Promise<void> {
-  await subscriptionStorage.scan(async subscriptions => {
+) {
+  await pubSubSubscriptionStorage.scan(async pubSubSubscriptions => {
     await Promise.all(
-      subscriptions.map(async subscription => {
-        if (subscription.connectionId === connectionQuery.id) {
-          // This subscription is for the provided connection.id. Delete it.
-          await subscriptionStorage.delete({ id: subscription.id });
+      pubSubSubscriptions.map(async pubSubSubscription => {
+        if (pubSubSubscription.connectionId === connectionQuery.id) {
+          // This pubSubSubscription is for the provided connection.id. Delete it.
+          await pubSubSubscriptionStorage.delete({ id: pubSubSubscription.id });
         }
       }),
     );

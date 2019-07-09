@@ -3,30 +3,22 @@ import {
   Expect,
   FocusTest,
   IgnoreTest,
-  TestCase,
   TestFixture,
-  Timeout,
 } from "alsatian";
 import {
   buildSchemaFromTypeDefinitions,
   IResolvers,
+  makeExecutableSchema,
   PubSub,
   PubSubEngine,
 } from "apollo-server-express";
 import { ApolloServer } from "apollo-server-express";
 import * as express from "express";
 import { DocumentNode } from "graphql";
-import gql from "graphql-tag";
 import * as http from "http";
 import * as urlModule from "url";
 import {
-  EpcpPubSubMixin,
-  IEpcpPublish,
-  IPubSubEnginePublish,
-} from "../graphql-epcp-pubsub/EpcpPubSubMixin";
-import {
   SimpleGraphqlApi,
-  SimpleGraphqlApiEpcpPublisher,
   SimpleGraphqlApiGripChannelNamer,
   SimpleGraphqlApiMutations,
   SimpleGraphqlApiSubscriptions,
@@ -37,12 +29,13 @@ import { ChangingValue } from "../testing-tools/ChangingValue";
 import { itemsFromLinkObservable } from "../testing-tools/itemsFromLinkObservable";
 import WebSocketApolloClient from "../testing-tools/WebSocketApolloClient";
 import { withListeningServer } from "../testing-tools/withListeningServer";
-import { IGraphqlSubscription } from "./GraphqlSubscription";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
 } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
 import { GraphqlWsOverWebSocketOverHttpStorageCleaner } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
+import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
+import { WebSocketOverHttpContextFunction } from "./WebSocketOverHttpGraphqlContext";
 
 interface ISubscriptionsListener {
   /** called on subscription start */
@@ -62,16 +55,12 @@ interface IGraphqlHttpAppOptions {
       pubsub: PubSubEngine;
     }): IResolvers;
   };
+  /** table that will store information about PubSubEngine subscriptions */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
   /** Object that will be called base on subscription connect/disconnect */
   subscriptionListener?: ISubscriptionsListener;
-  /** table in which to store graphql-ws Subscriptions */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
   /** configure WebSocket-Over-Http */
   webSocketOverHttp: {
-    /** Given a PubSubEngine publish invocation, return instructions for what to publish to a GRIP server via EPCP */
-    epcpPublishForPubSubEnginePublish(
-      publish: IPubSubEnginePublish,
-    ): Promise<IEpcpPublish[]>;
     /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
     getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
   };
@@ -79,28 +68,34 @@ interface IGraphqlHttpAppOptions {
 
 const WsOverHttpGraphqlHttpApp = (options: IGraphqlHttpAppOptions) => {
   const { subscriptionListener } = options;
-  const schema = buildSchemaFromTypeDefinitions(options.graphql.typeDefs);
-  const pubsub = EpcpPubSubMixin({
-    epcpPublishForPubSubEnginePublish:
-      options.webSocketOverHttp.epcpPublishForPubSubEnginePublish,
-    grip: {
-      url: process.env.GRIP_URL || "http://localhost:5561",
-    },
-    schema,
-  })(new PubSub());
+  const pubsub = new PubSub();
+  const resolvers = options.graphql.getResolvers({ pubsub });
+  const schema = makeExecutableSchema({
+    resolvers,
+    typeDefs: options.graphql.typeDefs,
+  });
   const expressApplication = express().use(
     GraphqlWsOverWebSocketOverHttpExpressMiddleware({
       connectionStorage: options.connectionStorage,
       getGripChannel: options.webSocketOverHttp.getGripChannel,
       onSubscriptionStart:
         subscriptionListener && subscriptionListener.onConnect,
-      subscriptionStorage: options.subscriptionStorage,
+      pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
+      schema,
     }),
   );
   const graphqlPath = "/";
   const subscriptionsPath = "/";
   const apolloServer = new ApolloServer({
-    resolvers: options.graphql.getResolvers({ pubsub }),
+    context: WebSocketOverHttpContextFunction({
+      grip: {
+        getGripChannel: options.webSocketOverHttp.getGripChannel,
+        url: process.env.GRIP_URL || "http://localhost:5561",
+      },
+      pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
+      schema,
+    }),
+    resolvers,
     subscriptions: {
       onConnect: subscriptionListener && subscriptionListener.onConnect,
       path: subscriptionsPath,
@@ -134,7 +129,9 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       _,
       latestSubscriptionChanged,
     ] = ChangingValue();
-    const subscriptionStorage = MapSimpleTable<IGraphqlSubscription>();
+    const pubSubSubscriptionStorage = MapSimpleTable<
+      IStoredPubSubSubscription
+    >();
     const graphqlSchema = buildSchemaFromTypeDefinitions(
       SimpleGraphqlApi().typeDefs,
     );
@@ -144,13 +141,9 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
         getResolvers: ({ pubsub }) => SimpleGraphqlApi({ pubsub }).resolvers,
         typeDefs: SimpleGraphqlApi().typeDefs,
       },
+      pubSubSubscriptionStorage,
       subscriptionListener: { onConnect: onSubscriptionConnection },
-      subscriptionStorage,
       webSocketOverHttp: {
-        epcpPublishForPubSubEnginePublish: SimpleGraphqlApiEpcpPublisher({
-          graphqlSchema,
-          subscriptionStorage,
-        }),
         getGripChannel: SimpleGraphqlApiGripChannelNamer(),
       },
     });
@@ -199,24 +192,19 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       _,
       latestSubscriptionChanged,
     ] = ChangingValue();
-    const subscriptionStorage = MapSimpleTable<IGraphqlSubscription>();
     const connectionStorage = MapSimpleTable<IStoredConnection>();
-    const graphqlSchema = buildSchemaFromTypeDefinitions(
-      SimpleGraphqlApi().typeDefs,
-    );
+    const pubSubSubscriptionStorage = MapSimpleTable<
+      IStoredPubSubSubscription
+    >();
     const app = WsOverHttpGraphqlHttpApp({
       connectionStorage,
       graphql: {
         getResolvers: ({ pubsub }) => SimpleGraphqlApi({ pubsub }).resolvers,
         typeDefs: SimpleGraphqlApi().typeDefs,
       },
+      pubSubSubscriptionStorage,
       subscriptionListener: { onConnect: onSubscriptionConnection },
-      subscriptionStorage,
       webSocketOverHttp: {
-        epcpPublishForPubSubEnginePublish: SimpleGraphqlApiEpcpPublisher({
-          graphqlSchema,
-          subscriptionStorage,
-        }),
         getGripChannel: SimpleGraphqlApiGripChannelNamer(),
       },
     });
@@ -233,8 +221,8 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       // Check that the subscription resulted in storing info about the subscription and also the graphql-ws connection it was sent over
       const storedConnectionsAfterSubscription = await connectionStorage.scan();
       Expect(storedConnectionsAfterSubscription.length).toEqual(1);
-      const storedSubscriptionsAfterSubscription = await subscriptionStorage.scan();
-      Expect(storedSubscriptionsAfterSubscription.length).toEqual(1);
+      const storedPubSubSubscriptionsAfterSubscription = await pubSubSubscriptionStorage.scan();
+      Expect(storedPubSubSubscriptionsAfterSubscription.length).toEqual(1);
 
       // Now let's make a mutation that should result in a message coming from the subscription
       const postToAdd = {
@@ -253,29 +241,31 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       );
 
       // Now we want to make sure it's possible to clean up records from storage once they have expired due to inactivity
-      const cleanUpStorage = await GraphqlWsOverWebSocketOverHttpStorageCleaner(
-        {
-          connectionStorage,
-          subscriptionStorage,
-        },
-      );
+      const cleanUpStorage = GraphqlWsOverWebSocketOverHttpStorageCleaner({
+        connectionStorage,
+        pubSubSubscriptionStorage,
+      });
       // first try a cleanup right now. Right after creating the connection and subscription. It should not result in any deleted rows because it's too soon. They haven't expired yet.
-      const subscriptionsAfterEarlyCleanup = await subscriptionStorage.scan();
-      Expect(subscriptionsAfterEarlyCleanup.length).toEqual(1);
-      const connectionsAfterEarlyCleanup = await connectionStorage.scan();
-      Expect(connectionsAfterEarlyCleanup.length).toEqual(1);
+      const afterEarlyCleanup = {
+        connections: await connectionStorage.scan(),
+        pubSubSubscriptions: await pubSubSubscriptionStorage.scan(),
+      };
+      Expect(afterEarlyCleanup.pubSubSubscriptions.length).toEqual(1);
+      Expect(afterEarlyCleanup.connections.length).toEqual(1);
 
       // Five minutes from now - At this point they should be expired
       const simulateCleanupAtDate = (() => {
         return new Date(
-          Date.parse(connectionsAfterEarlyCleanup[0].expiresAt) + 1,
+          Date.parse(afterEarlyCleanup.connections[0].expiresAt) + 1000,
         );
       })();
       await cleanUpStorage(simulateCleanupAtDate);
-      const subscriptionsAfterCleanup = await subscriptionStorage.scan();
-      const connectionsAfterCleanup = await connectionStorage.scan();
-      Expect(subscriptionsAfterCleanup.length).toEqual(0);
-      Expect(connectionsAfterCleanup.length).toEqual(0);
+      const afterCleanup = {
+        connections: await connectionStorage.scan(),
+        pubSubSubscriptions: await pubSubSubscriptionStorage.scan(),
+      };
+      Expect(afterCleanup.pubSubSubscriptions.length).toEqual(0);
+      Expect(afterCleanup.connections.length).toEqual(0);
     });
     return;
   }

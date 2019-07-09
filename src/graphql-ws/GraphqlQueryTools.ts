@@ -1,7 +1,6 @@
 import { getMainDefinition } from "apollo-utilities";
 import { ValueNode } from "graphql";
 import gql from "graphql-tag";
-import { ValuesOfCorrectType } from "graphql/validation/rules/ValuesOfCorrectType";
 
 /** Given a graphql query and a argument name, return the value of that argument in the query */
 export const getQueryArgumentValue = (

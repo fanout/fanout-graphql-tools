@@ -1,12 +1,4 @@
-import {
-  AsyncTest,
-  Expect,
-  FocusTest,
-  IgnoreTest,
-  TestCase,
-  TestFixture,
-  Timeout,
-} from "alsatian";
+import { AsyncTest, Expect, TestCase, TestFixture } from "alsatian";
 import { cli } from "../test/cli";
 import {
   getQueryArgumentValue,

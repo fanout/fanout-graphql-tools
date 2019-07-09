@@ -1,6 +1,5 @@
 import { getMainDefinition } from "apollo-utilities";
 import gql from "graphql-tag";
-import * as grip from "grip";
 import { IConnectionListener } from "../websocket-over-http-express/WebSocketOverHttpConnectionListener";
 import { IWebSocketOverHTTPConnectionInfo } from "../websocket-over-http-express/WebSocketOverHttpExpress";
 
@@ -67,6 +66,17 @@ export const isGraphqlWsStartMessage = (
     typeof o.payload === "object" &&
     typeof o.payload.query === "string"
   );
+};
+
+/** Given a JSON string that should be a graphql-ws start message, return a parsed object of it, or throw if inalid */
+export const parseGraphqlWsStartMessage = (
+  jsonString: string,
+): IGraphqlWsStartMessage => {
+  const startMessage = JSON.parse(jsonString);
+  if (!isGraphqlWsStartMessage(startMessage)) {
+    throw new Error(`invalid graphql-ws start message: ${jsonString}`);
+  }
+  return startMessage;
 };
 
 /** https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md#gql_stop */

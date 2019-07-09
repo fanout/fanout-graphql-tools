@@ -1,8 +1,7 @@
 import * as assert from "assert";
 import * as express from "express";
+import * as graphql from "graphql";
 import { WebSocketEvent } from "grip";
-import { v4 as uuidv4 } from "uuid";
-import { assertNever } from "../graphql-epcp-pubsub/EpcpPubSubMixin";
 import { default as AcceptAllGraphqlSubscriptionsMessageHandler } from "../graphql-ws/AcceptAllGraphqlSubscriptionsMessageHandler";
 import { filterTable, ISimpleTable } from "../simple-table/SimpleTable";
 import {
@@ -13,54 +12,16 @@ import {
 import WebSocketOverHttpExpress, {
   IWebSocketOverHTTPConnectionInfo,
 } from "../websocket-over-http-express/WebSocketOverHttpExpress";
-import { IGraphqlSubscription } from "./GraphqlSubscription";
 import GraphqlWebSocketOverHttpConnectionListener, {
-  getSubscriptionOperationFieldName,
   IGraphqlWsStartMessage,
   IGraphqlWsStopMessage,
   isGraphqlWsStartMessage,
   isGraphqlWsStopMessage,
+  parseGraphqlWsStartMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
 import { cleanupStorageAfterConnection } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
-
-interface ISubscriptionStoringMessageHandlerOptions {
-  /** WebSocket Connection Info */
-  connection: {
-    /** Connection ID */
-    id: string;
-  };
-  /** Table in which gql subscriptions are stored */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
-}
-
-/**
- * Websocket message handler that will watch for graphql-ws GQL_START events that initiate subscriptions
- * and store information about each subscription to the provided subscriptionStorage.
- */
-const SubscriptionStoringMessageHandler = (
-  options: ISubscriptionStoringMessageHandlerOptions,
-) => async (message: string) => {
-  const graphqlWsEvent = JSON.parse(message);
-  if (!isGraphqlWsStartMessage(graphqlWsEvent)) {
-    return;
-  }
-  const operationId = graphqlWsEvent.id;
-  assert(operationId, "graphql-ws GQL_START message must have id");
-  const payload = graphqlWsEvent.payload;
-  const query = payload && payload.query;
-  assert(query, "graphql-ws GQL_START message must have query");
-  const subscriptionFieldName = getSubscriptionOperationFieldName(
-    graphqlWsEvent.payload,
-  );
-  await options.subscriptionStorage.insert({
-    connectionId: options.connection.id,
-    createdAt: new Date(Date.now()).toISOString(),
-    id: uuidv4(),
-    operationId,
-    startMessage: message,
-    subscriptionFieldName,
-  });
-};
+import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
+import { IWebSocketOverHttpGraphqlSubscriptionContext } from "./WebSocketOverHttpGraphqlContext";
 
 /** WebSocket Message Handler that calls a callback on graphql-ws start message */
 const GraphqlWsStartMessageHandler = (
@@ -86,47 +47,114 @@ const GraphqlWsStopMessageHandler = (
 
 /**
  * WebSocket message handler that will watch for graphql-ws GQL_STOP events that stop subscriptions,
- * and remove corresponding subscription records from subscriptionStorage.
+ * and remove corresponding pubSubSubscription records from pubSubSubscriptionStorage.
  */
-const SubscriptionDeletingMessageHandler = (
-  options: ISubscriptionStoringMessageHandlerOptions,
-) => async (message: string) => {
+const PubSubSubscriptionDeletingMessageHandler = (options: {
+  /** WebSocket Connection Info */
+  connection: {
+    /** Connection ID */
+    id: string;
+  };
+  /** Table in which gql subscriptions are stored */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
+}) => async (message: string) => {
   const graphqlWsEvent = JSON.parse(message);
   if (!isGraphqlWsStopMessage(graphqlWsEvent)) {
     return;
   }
   const operationId = graphqlWsEvent.id;
   assert(operationId, "graphql-ws GQL_STOP message must have id");
-  const subscriptionRowsForThisEvent = await filterTable(
-    options.subscriptionStorage,
+  const pubSubscriptionRowsForThisEvent = await filterTable(
+    options.pubSubSubscriptionStorage,
     sub => {
+      const subscriptionOperationStartMessage = JSON.parse(
+        sub.graphqlWsStartMessage,
+      );
+      if (!isGraphqlWsStartMessage(subscriptionOperationStartMessage)) {
+        throw new Error(
+          `invalid graphql-ws start message ${sub.graphqlWsStartMessage}`,
+        );
+      }
+      const subscriptionOperationId = subscriptionOperationStartMessage.id;
       return (
         sub.connectionId === options.connection.id &&
-        sub.operationId === graphqlWsEvent.id
+        subscriptionOperationId === graphqlWsEvent.id
       );
     },
   );
   await Promise.all(
-    subscriptionRowsForThisEvent.map(sub =>
-      options.subscriptionStorage.delete({ id: sub.id }),
+    pubSubscriptionRowsForThisEvent.map(sub =>
+      options.pubSubSubscriptionStorage.delete({ id: sub.id }),
     ),
   );
 };
 
-/** Create a function that will cleanup after a collection by removing that connection's subscriptions in a ISimpleTable<GraphqlSubscription> */
-const SubscriptionStorageConnectionCleanup = (
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>,
-) => async (connection: IWebSocketOverHTTPConnectionInfo): Promise<void> => {
-  const subscriptionsForConnection = await filterTable(
-    subscriptionStorage,
-    subscription => subscription.connectionId === connection.id,
+/** Message handler that will properly handle graphql-ws subscription operations
+ * by calling `subscribe` export of `graphql` package
+ */
+const ExecuteGraphqlWsSubscriptionsMessageHandler = (options: {
+  /** ws-over-http info */
+  webSocketOverHttp: {
+    /** info aobut the ws-over-http connection */
+    connection: IWebSocketOverHTTPConnectionInfo;
+  };
+  /** table to store PubSub subscription info in */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
+  /** graphql resolver root value */
+  rootValue?: any;
+  /** graphql schema to evaluate subscriptions against */
+  schema: graphql.GraphQLSchema;
+}) => async (message: string) => {
+  const graphqlWsEvent = JSON.parse(message);
+  const operation = graphqlWsEvent && graphqlWsEvent.payload;
+  if (!(isGraphqlWsStartMessage(graphqlWsEvent) && operation)) {
+    // not a graphql-ws subscription start. Do nothing
+    return;
+  }
+  const queryDocument = graphql.parse(operation.query);
+  // const validationErrors = graphql.validate(queryDocument)
+  const operationAST = graphql.getOperationAST(
+    queryDocument,
+    operation.operationName || "",
   );
-  await Promise.all(
-    subscriptionsForConnection.map(subscription =>
-      subscriptionStorage.delete(subscription),
-    ),
-  );
-  return;
+  if (!(operationAST && operationAST.operation === "subscription")) {
+    // not a subscription. do nothing
+    return;
+  }
+  const contextValue: IWebSocketOverHttpGraphqlSubscriptionContext = {
+    webSocketOverHttp: {
+      connection: options.webSocketOverHttp.connection,
+      graphql: {
+        schema: options.schema,
+      },
+      graphqlWs: {
+        startMessage: graphqlWsEvent,
+      },
+      pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
+    },
+  };
+  const subscriptionAsyncIterator = await graphql.subscribe({
+    contextValue,
+    document: queryDocument,
+    operationName: operation.operationName,
+    rootValue: options.rootValue,
+    schema: options.schema,
+    variableValues: operation.variables,
+  });
+  if ("next" in subscriptionAsyncIterator) {
+    // may need to call this to actually trigger underlying subscription resolver.
+    // When underlying PubSub has SubscriptionStoragePubSubMixin, this will result in storing some info
+    // about what PubSub event names are subscribed to.
+    subscriptionAsyncIterator.next();
+  }
+  if (
+    "return" in subscriptionAsyncIterator &&
+    subscriptionAsyncIterator.return
+  ) {
+    // but we don't want to keep listening on this terator. Subscription events will be broadcast to EPCP gateway
+    // at time of mutation.
+    subscriptionAsyncIterator.return();
+  }
 };
 
 /** Interface for ws-over-http connections stored in the db */
@@ -152,8 +180,8 @@ const ConnectionStoringConnectionListener = (options: {
   connectionStorage: ISimpleTable<IStoredConnection>;
   /** how often to ask ws-over-http gateway to make keepalive requests */
   keepAliveIntervalSeconds: number;
-  /** table where subscriptions are stored. Needed to cleanup after connections */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
+  /** table to store PubSub subscription info in */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
 }): IConnectionListener => {
   // Return date of when we should consider the connection expired because of inactivity.
   // now + (2 * keepAliveIntervalSeconds)
@@ -181,7 +209,7 @@ const ConnectionStoringConnectionListener = (options: {
     await cleanupStorageAfterConnection({
       connection: { id: options.connection.id },
       connectionStorage: options.connectionStorage,
-      subscriptionStorage: options.subscriptionStorage,
+      pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
     });
   };
   return {
@@ -253,11 +281,18 @@ const ConnectionStoringConnectionListener = (options: {
   };
 };
 
+/** TypeScript helper for exhaustive switches https://www.typescriptlang.org/docs/handbook/advanced-types.html  */
+function assertNever(x: never): never {
+  throw new Error("Unexpected object: " + x);
+}
+
 interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
   /** table to store information about each ws-over-http connection */
   connectionStorage: ISimpleTable<IStoredConnection>;
-  /** table to store information about each Graphql Subscription */
-  subscriptionStorage: ISimpleTable<IGraphqlSubscription>;
+  /** table to store PubSub subscription info in */
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
+  /** graphql schema */
+  schema: graphql.GraphQLSchema;
   /** WebSocket-Over-HTTP options */
   webSocketOverHttp?: {
     /** how often to ask ws-over-http gateway to make keepalive requests */
@@ -284,9 +319,12 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
       /** This connectionListener will respond to graphql-ws messages in a way that accepts all incoming subscriptions */
       const graphqlWsConnectionListener = GraphqlWebSocketOverHttpConnectionListener(
         {
-          cleanupConnection: SubscriptionStorageConnectionCleanup(
-            options.subscriptionStorage,
-          ),
+          async cleanupConnection(conn) {
+            await cleanupStorageAfterConnection({
+              ...options,
+              connection: conn,
+            });
+          },
           connection,
           getMessageResponse: AcceptAllGraphqlSubscriptionsMessageHandler(),
           webSocketOverHttp: {
@@ -303,13 +341,13 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
               if ("connection" in channelSelector) {
                 // look up by connectionId
                 const subscriptionsForConnection = await filterTable(
-                  options.subscriptionStorage,
+                  options.pubSubSubscriptionStorage,
                   subscription =>
                     subscription.connectionId === channelSelector.connection.id,
                 );
                 return await Promise.all(
                   subscriptionsForConnection.map(s => {
-                    const startMessage = JSON.parse(s.startMessage);
+                    const startMessage = JSON.parse(s.graphqlWsStartMessage);
                     return startMessage;
                   }),
                 );
@@ -318,17 +356,19 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
                 const stopMessage: IGraphqlWsStopMessage = channelSelector;
                 // Look up the graphql-ws start message corresponding to this stop message from the subscriptionStorage
                 const storedSubscriptionsForStopMessage = await filterTable(
-                  options.subscriptionStorage,
+                  options.pubSubSubscriptionStorage,
                   s => {
                     return (
-                      s.operationId === stopMessage.id &&
-                      s.connectionId === connection.id
+                      parseGraphqlWsStartMessage(s.graphqlWsStartMessage).id ===
+                        stopMessage.id && s.connectionId === connection.id
                     );
                   },
                 );
                 return await Promise.all(
                   storedSubscriptionsForStopMessage.map(s => {
-                    const startMessage = JSON.parse(s.startMessage);
+                    const startMessage = parseGraphqlWsStartMessage(
+                      s.graphqlWsStartMessage,
+                    );
                     return startMessage;
                   }),
                 );
@@ -342,18 +382,6 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
             return gripChannels;
           },
         },
-      );
-      const { subscriptionStorage } = options;
-      /**
-       * We also want to keep track of all subscriptions in a table so we can look them up later when publishing.
-       * So this message handler will watch for graphql-ws GQL_START mesages and store subscription info based on them
-       */
-      const storeSubscriptionsMessageHandler = SubscriptionStoringMessageHandler(
-        { connection, subscriptionStorage },
-      );
-      /** And a handler that will delete stored subscriptions when there are Stopped */
-      const deleteSubscriptionsOnStopMessageHandler = SubscriptionDeletingMessageHandler(
-        { connection, subscriptionStorage },
       );
       const subscriptionEventCallbacksConnectionListener: IConnectionListener = {
         onMessage: composeMessageHandlers([
@@ -381,11 +409,21 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
           connection,
           connectionStorage,
           keepAliveIntervalSeconds,
-          subscriptionStorage,
+          pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
         }),
-        { onMessage: storeSubscriptionsMessageHandler },
+        {
+          onMessage: ExecuteGraphqlWsSubscriptionsMessageHandler({
+            ...options,
+            webSocketOverHttp: { connection },
+          }),
+        },
         graphqlWsConnectionListener,
-        { onMessage: deleteSubscriptionsOnStopMessageHandler },
+        {
+          onMessage: PubSubSubscriptionDeletingMessageHandler({
+            connection,
+            pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
+          }),
+        },
         subscriptionEventCallbacksConnectionListener,
       ]);
     },

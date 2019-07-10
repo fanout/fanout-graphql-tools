@@ -1,8 +1,16 @@
 import { GraphQLSchema } from "graphql";
 import { ISimpleTable } from "../simple-table/SimpleTable";
-import { EpcpSubscriptionPublisher } from "./EpcpSubscriptionPublisher";
+import {
+  EpcpSubscriptionPublisher,
+  UniqueGripChannelNameSubscriptionFilterer,
+} from "./EpcpSubscriptionPublisher";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
+import { gripChannelForSubscriptionWithoutArguments } from "./GraphqlWsGripChannelNamers";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
+import {
+  IPubSubEnginePublish,
+  PubSubSubscriptionsForPublishFromStorageGetter,
+} from "./SubscriptionStoragePubSubMixin";
 
 /** Interface for graphql server context when the request is coming via graphql-ws over websocket-over-http */
 export interface IContextForPublishingWithEpcp {
@@ -13,8 +21,10 @@ export interface IContextForPublishingWithEpcp {
       /** graphql Schema */
       schema: GraphQLSchema;
     };
-    /** table to store PubSub subscription info in */
-    pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
+    /** get the relevant pubSubSubscriptions for a PubSub publish (e.g. read from storage) */
+    getPubSubSubscriptionsForPublish(
+      publish: IPubSubEnginePublish,
+    ): AsyncIterable<IStoredPubSubSubscription>;
     /** publish to a connection */
     publish(
       subscription: IStoredPubSubSubscription,
@@ -60,14 +70,27 @@ export const WebSocketOverHttpContextFunction = (options: {
     getGripChannel?(gqlStartMessage: IGraphqlWsStartMessage): string;
   };
 }) => {
+  const getGripChannel =
+    options.grip.getGripChannel || gripChannelForSubscriptionWithoutArguments;
   const context: IContextForPublishingWithEpcp = {
     epcpPublishing: {
+      getPubSubSubscriptionsForPublish(publish) {
+        const storedSubscriptions = PubSubSubscriptionsForPublishFromStorageGetter(
+          options.pubSubSubscriptionStorage,
+        )(publish);
+        const filteredForUniqueGripChannel = UniqueGripChannelNameSubscriptionFilterer(
+          { getGripChannel },
+        )(storedSubscriptions);
+        return filteredForUniqueGripChannel;
+      },
       graphql: {
         schema: options.schema,
       },
-      pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
       publish: EpcpSubscriptionPublisher({
-        grip: options.grip,
+        grip: {
+          getGripChannel,
+          ...options.grip,
+        },
       }),
     },
   };

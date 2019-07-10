@@ -4,8 +4,10 @@ import { SimpleGraphqlApiGripChannelNamer } from "../simple-graphql-api/SimpleGr
 import {
   IGraphqlWsStartMessage,
   isGraphqlWsStartMessage,
+  parseGraphqlWsStartMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
+import { IPubSubEnginePublish } from "./SubscriptionStoragePubSubMixin";
 
 export type ISubscriptionPublisher = (
   subscription: IStoredPubSubSubscription,
@@ -19,7 +21,7 @@ export const EpcpSubscriptionPublisher = (options: {
     /** Grip Control URL */
     url: string;
     /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-    getGripChannel?(gqlStartMessage: IGraphqlWsStartMessage): string;
+    getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
   };
 }): ISubscriptionPublisher => async (subscription, messages) => {
   const gripPubControl = new grip.GripPubControl(
@@ -33,8 +35,7 @@ export const EpcpSubscriptionPublisher = (options: {
       `subscription.graphqlWsStartMessage is invalid: ${subscription.graphqlWsStartMessage}`,
     );
   }
-  const gripChannelName = (options.grip.getGripChannel ||
-    SimpleGraphqlApiGripChannelNamer())(subscriptionStartMessage);
+  const gripChannelName = options.grip.getGripChannel(subscriptionStartMessage);
   for (const message of messages) {
     const dataMessage = {
       id: subscriptionStartMessage.id,
@@ -58,4 +59,29 @@ export const EpcpSubscriptionPublisher = (options: {
       );
     });
   }
+};
+
+/**
+ * Filter an AsyncIterable of stored PubSub subscriptions to only return
+ * one subscription per unique value of applying getGripChannel
+ */
+export const UniqueGripChannelNameSubscriptionFilterer = (options: {
+  /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
+  getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
+}) => {
+  async function* filterSubscriptionsForUniqueGripChannel(
+    subscriptions: AsyncIterable<IStoredPubSubSubscription>,
+  ): AsyncIterableIterator<IStoredPubSubSubscription> {
+    const seenGripChannels = new Set<string>();
+    for await (const s of subscriptions) {
+      const gripChannel = options.getGripChannel(
+        parseGraphqlWsStartMessage(s.graphqlWsStartMessage),
+      );
+      if (!seenGripChannels.has(gripChannel)) {
+        yield s;
+      }
+      seenGripChannels.add(gripChannel);
+    }
+  }
+  return filterSubscriptionsForUniqueGripChannel;
 };

@@ -307,7 +307,7 @@ async function testMultipleGraphqlSubscriptions(
   );
   await latestSubscriptionChanged();
 
-  const mutationResult = await apolloClient1.mutate(
+  await apolloClient1.mutate(
     SimpleGraphqlApiMutations.addPost({ author: "me", comment: "hello" }),
   );
   await timer(500);

@@ -9,7 +9,7 @@ import {
 } from "./GraphqlWebSocketOverHttpConnectionListener";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 
-interface IPubSubEnginePublish {
+export interface IPubSubEnginePublish {
   /** publish trigger name as string */
   triggerName: string;
   /** payload passed for this triggered publish */
@@ -97,6 +97,30 @@ export const SubscriptionStoragePubSubMixin = (options: {
 };
 
 /**
+ * Create a function that will retrive stored PubSubSubscriptions from storage via ISimpleTable interface.
+ * The resulting function can be passed as options.getPubSubSubscriptionsForPublish to PublishToStoredSubscriptionsPubSubMixin
+ */
+export const PubSubSubscriptionsForPublishFromStorageGetter = (
+  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>,
+) => {
+  const getPubSubSubscriptionsForPublishFromStorage = async function*(
+    publish: IPubSubEnginePublish,
+  ) {
+    /**
+     * @TODO this will use lots of memory when there are many subscriptions.
+     * We should use the callback-version of .scan(cb), and find a way of casting tha to an AsyncIterator
+     * This could help: https://stackoverflow.com/a/50865906
+     */
+    const subscriptionsForTrigger = (await pubSubSubscriptionStorage.scan()).filter(
+      storedSubscription =>
+        storedSubscription.triggerName === publish.triggerName,
+    );
+    yield* subscriptionsForTrigger;
+  };
+  return getPubSubSubscriptionsForPublishFromStorage;
+};
+
+/**
  * PubSub mixin that will patch publish method to also publish to stored pubSubSubscriptions
  */
 export const PublishToStoredSubscriptionsPubSubMixin = (options: {
@@ -105,8 +129,10 @@ export const PublishToStoredSubscriptionsPubSubMixin = (options: {
     /** graphql schema */
     schema: graphql.GraphQLSchema;
   };
-  /** table to store PubSub subscription info in */
-  pubSubSubscriptionStorage: ISimpleTable<IStoredPubSubSubscription>;
+  /** get the relevant pubSubSubscriptions for a PubSub publish (e.g. read from storage) */
+  getPubSubSubscriptionsForPublish(
+    publish: IPubSubEnginePublish,
+  ): AsyncIterable<IStoredPubSubSubscription>;
   /** publish to a connection */
   publish(
     subscription: IStoredPubSubSubscription,
@@ -123,63 +149,56 @@ export const PublishToStoredSubscriptionsPubSubMixin = (options: {
      * For each stored PubSub Subscription, if it was for this eventName, consider publishing to it
      * @todo consider abstracting SimpleTable interface behind a more generic AsyncIterator interface
      */
-    await options.pubSubSubscriptionStorage.scan(
-      async (
-        pubSubSubscriptions: IStoredPubSubSubscription[],
-      ): Promise<boolean> => {
-        await Promise.all(
-          pubSubSubscriptions
-            .filter(
-              storedSubscription =>
-                storedSubscription.triggerName === triggerName,
-            )
-            .map(async storedSubscription => {
-              // This storedSubscription was listening for this triggerName.
-              // That means it's listening for it but may still do further filtering.
-              const fakePubSub = PrePublishedPubSub([{ triggerName, payload }]);
-              const storedSubscriptionGraphqlWsStartMessage = JSON.parse(
-                storedSubscription.graphqlWsStartMessage,
-              );
-              if (
-                !isGraphqlWsStartMessage(
-                  storedSubscriptionGraphqlWsStartMessage,
-                )
-              ) {
-                throw new Error(
-                  `couldn't parse storedSubscription graphql-ws start message`,
-                );
-              }
-              const operation = storedSubscriptionGraphqlWsStartMessage.payload;
-              const contextValue: ISubscriptionTestGraphqlContext = {
-                subscriptionTest: {
-                  pubsub: fakePubSub,
-                },
-              };
-              const subscriptionResult = await graphql.subscribe({
-                contextValue,
-                document: graphql.parse(operation.query),
-                operationName: operation.operationName,
-                schema: options.graphql.schema,
-                variableValues: operation.variables,
-              });
-              if (isAsyncIterable(subscriptionResult)) {
-                const subscriptionResultItems = [];
-                for await (const result of subscriptionResult) {
-                  subscriptionResultItems.push(result);
-                }
-                await options.publish(
-                  storedSubscription,
-                  subscriptionResultItems,
-                );
-              }
-            }),
+    for await (const storedSubscription of options.getPubSubSubscriptionsForPublish(
+      { triggerName, payload },
+    )) {
+      const subscriptionResult = await simulateStoredSubscription(
+        storedSubscription,
+      );
+      if (isAsyncIterable(subscriptionResult)) {
+        const subscriptionResultItems = [];
+        for await (const result of subscriptionResult) {
+          subscriptionResultItems.push(result);
+        }
+        await options.publish(storedSubscription, subscriptionResultItems);
+      }
+    }
+    /** for the stored subscription, simulate this publish for it, and if there are subscription results, pass them to options.publish */
+    async function simulateStoredSubscription(
+      storedSubscription: IStoredPubSubSubscription,
+    ) {
+      // This storedSubscription was listening for this triggerName.
+      // That means it's listening for it but may still do further filtering.
+      const fakePubSub = PrePublishedPubSub([{ triggerName, payload }]);
+      const storedSubscriptionGraphqlWsStartMessage = JSON.parse(
+        storedSubscription.graphqlWsStartMessage,
+      );
+      if (!isGraphqlWsStartMessage(storedSubscriptionGraphqlWsStartMessage)) {
+        throw new Error(
+          `couldn't parse storedSubscription graphql-ws start message`,
         );
-        return true;
-      },
-    );
+      }
+      const operation = storedSubscriptionGraphqlWsStartMessage.payload;
+      const contextValue: ISubscriptionTestGraphqlContext = {
+        subscriptionTest: {
+          pubsub: fakePubSub,
+        },
+      };
+      const subscriptionResult = await graphql.subscribe({
+        contextValue,
+        document: graphql.parse(operation.query),
+        operationName: operation.operationName,
+        schema: options.graphql.schema,
+        variableValues: operation.variables,
+      });
+      return subscriptionResult;
+    }
   };
-  const pubSubWithStorage: PubSubEngine = Object.assign(Object.create(pubsub), {
-    publish,
-  });
-  return pubSubWithStorage;
+  const pubSubWithPatchedPublish: PubSubEngine = Object.assign(
+    Object.create(pubsub),
+    {
+      publish,
+    },
+  );
+  return pubSubWithPatchedPublish;
 };

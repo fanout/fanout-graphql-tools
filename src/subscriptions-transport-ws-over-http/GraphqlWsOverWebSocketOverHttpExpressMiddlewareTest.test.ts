@@ -5,6 +5,9 @@ import {
   IgnoreTest,
   TestFixture,
 } from "alsatian";
+import { NormalizedCacheObject } from "apollo-cache-inmemory";
+import ApolloClient from "apollo-client";
+import { ApolloServer } from "apollo-server-express";
 import {
   buildSchemaFromTypeDefinitions,
   IResolvers,
@@ -12,7 +15,6 @@ import {
   PubSub,
   PubSubEngine,
 } from "apollo-server-express";
-import { ApolloServer } from "apollo-server-express";
 import * as express from "express";
 import { DocumentNode } from "graphql";
 import * as http from "http";
@@ -213,7 +215,8 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
         subscriptionsUrl: urlWithPath(pushpinProxyUrl, app.subscriptionsPath),
         url: urlWithPath(pushpinProxyUrl, app.graphqlPath),
       };
-      const apolloClient = WebSocketApolloClient(urls);
+      const createApolloClient = () => WebSocketApolloClient(urls);
+      const apolloClient = createApolloClient();
       const { items, subscription } = itemsFromLinkObservable(
         apolloClient.subscribe(SimpleGraphqlApiSubscriptions.postAdded()),
       );
@@ -266,9 +269,50 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       };
       Expect(afterCleanup.pubSubSubscriptions.length).toEqual(0);
       Expect(afterCleanup.connections.length).toEqual(0);
+
+      await testMultipleGraphqlSubscriptions(
+        createApolloClient,
+        latestSubscriptionChanged,
+      );
     });
     return;
   }
+}
+
+/**
+ * There was a bug that would manifest like so:
+ * * create a graphql-ws subscription (through pushpin/GRIP) using N>=2 clients. Identical subscriptions (e.g. two tabs in graphiql playground)
+ * * send a mutation that should result in a message on the subscriptions
+ * * You expect each client to receive 1 message from the mutation, but actually they will receive N.
+ * This was because, while they were all independent clients/subscriptions, they all end up reusing the same Grip-Channel. So we only need to publish one message via EPCP to that Grip-Channel, not N messages, one per subscription.
+ * This tests that this bug is fixed.
+ */
+async function testMultipleGraphqlSubscriptions(
+  // It's assumed this is properly configured to talk to a listening graphql API through pushpin that is running the 'SimpleGraphqlAPI' typeDefs/resolvers
+  createApolloClient: () => ApolloClient<NormalizedCacheObject>,
+  // call this to get a promise for when a new subscription is fully handled by the server
+  latestSubscriptionChanged: () => Promise<any>,
+): Promise<void> {
+  // we need separate apollo clients because we want the graphql-ws start messages that come in to be exactly equivalent, including the operationId.
+  // If we use the same client, it auto-increments the operationId and the bug would not happen.
+  const apolloClient1 = createApolloClient();
+  const firstSubscriptionListener = itemsFromLinkObservable(
+    apolloClient1.subscribe(SimpleGraphqlApiSubscriptions.postAdded()),
+  );
+  await latestSubscriptionChanged();
+
+  const apolloClient2 = createApolloClient();
+  const secondSubscriptionListener = itemsFromLinkObservable(
+    apolloClient2.subscribe(SimpleGraphqlApiSubscriptions.postAdded()),
+  );
+  await latestSubscriptionChanged();
+
+  await apolloClient1.mutate(
+    SimpleGraphqlApiMutations.addPost({ author: "me", comment: "hello" }),
+  );
+  await timer(500);
+  Expect(firstSubscriptionListener.items.length).toEqual(1);
+  Expect(secondSubscriptionListener.items.length).toEqual(1);
 }
 
 if (require.main === module) {

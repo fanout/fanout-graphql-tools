@@ -8,7 +8,9 @@
     "rules": {
         "completed-docs": [true, {
             "classes": true,
-            "functions": true,
+            "functions": {
+                "visibilities": ["exported"]
+            },
             "methods": true,
             "properties": true,
             "variables": {

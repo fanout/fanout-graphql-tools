@@ -147,7 +147,6 @@ export const PublishToStoredSubscriptionsPubSubMixin = (options: {
     await pubsub.publish(triggerName, payload);
     /**
      * For each stored PubSub Subscription, if it was for this eventName, consider publishing to it
-     * @todo consider abstracting SimpleTable interface behind a more generic AsyncIterator interface
      */
     for await (const storedSubscription of options.getPubSubSubscriptionsForPublish(
       { triggerName, payload },

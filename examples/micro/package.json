@@ -1,0 +1,31 @@
+{
+  "name": "fanout-graphql-tools-example-micro",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "bundledDependencies": [
+    "fanout-graphql-tools"
+  ],
+  "scripts": {
+    "build": "npm run tsc",
+    "check": "npm run prettier:check && npm run tsc:check && npm run tslint",
+    "check-and-build": "npm run check && npm run build",
+    "prettier": "../../node_modules/.bin/prettier '{package.json,tsconfig.json,src/**/*.{ts,tsx}}' --write",
+    "prettier:check": "../../node_modules/.bin/prettier '{package.json,tsconfig.json,src/**/*.{ts,tsx}}' --check",
+    "start": "ts-node src",
+    "test": "ts-node src/test/unit && npm run check",
+    "tsc": "tsc -p tsconfig.json",
+    "tsc:check": "npm run tsc -- --noEmit",
+    "tslint": "../../node_modules/.bin/tslint -c ../../tslint.json 'src/**/*.ts'"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/micro": "^7.3.3",
+    "apollo-server-micro": "^2.6.9",
+    "micro": "^9.3.4"
+  },
+  "devDependencies": {
+    "ts-node": "^8.3.0"
+  }
+}

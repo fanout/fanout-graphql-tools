@@ -30,7 +30,7 @@ import { ChangingValue } from "../testing-tools/ChangingValue";
 import { itemsFromLinkObservable } from "../testing-tools/itemsFromLinkObservable";
 import WebSocketApolloClient from "../testing-tools/WebSocketApolloClient";
 import { withListeningServer } from "../testing-tools/withListeningServer";
-import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
+import { GraphqlWsGripChannelNamer } from "./GraphqlWsGripChannelNamers";
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
 } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
@@ -63,7 +63,7 @@ interface IGraphqlHttpAppOptions {
   /** configure WebSocket-Over-Http */
   webSocketOverHttp?: {
     /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-    getGripChannel?(gqlStartMessage: IGraphqlWsStartMessage): string;
+    getGripChannel?: GraphqlWsGripChannelNamer;
   };
 }
 
@@ -212,15 +212,25 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       };
       const createApolloClient = () => WebSocketApolloClient(urls);
       const apolloClient = createApolloClient();
-      const { items, subscription } = itemsFromLinkObservable(
-        apolloClient.subscribe(SimpleGraphqlApiSubscriptions.postAdded()),
-      );
-      await latestSubscriptionChanged();
+      const subscriptionListeners = await (async () => {
+        const listeners = [];
+        // create these one at a time so we can wait for latestSubscriptionChanged after each subscription attempt
+        for (const i of new Array(2).fill(0)) {
+          const listener = itemsFromLinkObservable(
+            apolloClient.subscribe(SimpleGraphqlApiSubscriptions.postAdded()),
+          );
+          await latestSubscriptionChanged();
+          listeners.push(listener);
+        }
+        return listeners;
+      })();
       // Check that the subscription resulted in storing info about the subscription and also the graphql-ws connection it was sent over
       const storedConnectionsAfterSubscription = await connectionStorage.scan();
       Expect(storedConnectionsAfterSubscription.length).toEqual(1);
       const storedPubSubSubscriptionsAfterSubscription = await pubSubSubscriptionStorage.scan();
-      Expect(storedPubSubSubscriptionsAfterSubscription.length).toEqual(1);
+      Expect(storedPubSubSubscriptionsAfterSubscription.length).toEqual(
+        subscriptionListeners.length,
+      );
 
       // Now let's make a mutation that should result in a message coming from the subscription
       const postToAdd = {
@@ -232,8 +242,9 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       );
       Expect(mutationResult.data.addPost.comment).toEqual(postToAdd.comment);
       await timer(500);
-      Expect(items.length).toEqual(1);
-      const firstPostAddedMessage = items[0];
+      Expect(subscriptionListeners[0].items.length).toEqual(1);
+      Expect(subscriptionListeners[1].items.length).toEqual(1);
+      const firstPostAddedMessage = subscriptionListeners[0].items[0];
       Expect(firstPostAddedMessage.data.postAdded.comment).toEqual(
         postToAdd.comment,
       );
@@ -248,7 +259,9 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
         connections: await connectionStorage.scan(),
         pubSubSubscriptions: await pubSubSubscriptionStorage.scan(),
       };
-      Expect(afterEarlyCleanup.pubSubSubscriptions.length).toEqual(1);
+      Expect(afterEarlyCleanup.pubSubSubscriptions.length).toEqual(
+        subscriptionListeners.length,
+      );
       Expect(afterEarlyCleanup.connections.length).toEqual(1);
 
       // Five minutes from now - At this point they should be expired

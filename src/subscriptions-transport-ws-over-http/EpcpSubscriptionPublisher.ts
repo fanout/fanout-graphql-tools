@@ -1,10 +1,7 @@
 import * as grip from "grip";
 import * as pubcontrol from "pubcontrol";
-import {
-  IGraphqlWsStartMessage,
-  isGraphqlWsStartMessage,
-  parseGraphqlWsStartMessage,
-} from "./GraphqlWebSocketOverHttpConnectionListener";
+import { parseGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
+import { GraphqlWsGripChannelNamer } from "./GraphqlWsGripChannelNamers";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 
 export type ISubscriptionPublisher = (
@@ -19,21 +16,19 @@ export const EpcpSubscriptionPublisher = (options: {
     /** Grip Control URL */
     url: string;
     /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-    getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
+    getGripChannel: GraphqlWsGripChannelNamer;
   };
 }): ISubscriptionPublisher => async (subscription, messages) => {
   const gripPubControl = new grip.GripPubControl(
     grip.parseGripUri(options.grip.url),
   );
-  const subscriptionStartMessage = JSON.parse(
+  const subscriptionStartMessage = parseGraphqlWsStartMessage(
     subscription.graphqlWsStartMessage,
   );
-  if (!isGraphqlWsStartMessage(subscriptionStartMessage)) {
-    throw new Error(
-      `subscription.graphqlWsStartMessage is invalid: ${subscription.graphqlWsStartMessage}`,
-    );
-  }
-  const gripChannelName = options.grip.getGripChannel(subscriptionStartMessage);
+  const gripChannelName = options.grip.getGripChannel({
+    connectionId: subscription.connectionId,
+    graphqlWsStartMessage: subscriptionStartMessage,
+  });
   for (const message of messages) {
     const dataMessage = {
       id: subscriptionStartMessage.id,
@@ -65,16 +60,19 @@ export const EpcpSubscriptionPublisher = (options: {
  */
 export const UniqueGripChannelNameSubscriptionFilterer = (options: {
   /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-  getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
+  getGripChannel: GraphqlWsGripChannelNamer;
 }) => {
   async function* filterSubscriptionsForUniqueGripChannel(
     subscriptions: AsyncIterable<IStoredPubSubSubscription>,
   ): AsyncIterableIterator<IStoredPubSubSubscription> {
     const seenGripChannels = new Set<string>();
     for await (const s of subscriptions) {
-      const gripChannel = options.getGripChannel(
-        parseGraphqlWsStartMessage(s.graphqlWsStartMessage),
-      );
+      const gripChannel = options.getGripChannel({
+        connectionId: s.connectionId,
+        graphqlWsStartMessage: parseGraphqlWsStartMessage(
+          s.graphqlWsStartMessage,
+        ),
+      });
       if (!seenGripChannels.has(gripChannel)) {
         yield s;
       }

@@ -5,7 +5,10 @@ import {
   UniqueGripChannelNameSubscriptionFilterer,
 } from "./EpcpSubscriptionPublisher";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
-import { DefaultGripChannelNamer } from "./GraphqlWsGripChannelNamers";
+import {
+  DefaultGripChannelNamer,
+  GraphqlWsGripChannelNamer,
+} from "./GraphqlWsGripChannelNamers";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 import {
   IPubSubEnginePublish,
@@ -67,7 +70,7 @@ export const WebSocketOverHttpContextFunction = (options: {
     /** GRIP URI for EPCP Gateway */
     url: string;
     /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-    getGripChannel?(gqlStartMessage: IGraphqlWsStartMessage): string;
+    getGripChannel?: GraphqlWsGripChannelNamer;
   };
 }) => {
   const getGripChannel =
@@ -78,10 +81,7 @@ export const WebSocketOverHttpContextFunction = (options: {
         const storedSubscriptions = PubSubSubscriptionsForPublishFromStorageGetter(
           options.pubSubSubscriptionStorage,
         )(publish);
-        const filteredForUniqueGripChannel = UniqueGripChannelNameSubscriptionFilterer(
-          { getGripChannel },
-        )(storedSubscriptions);
-        return filteredForUniqueGripChannel;
+        return storedSubscriptions;
       },
       graphql: {
         schema: options.schema,

@@ -53,7 +53,7 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
     })
     ```
 
-    You can see a full example of this [here](./src/examples/apollo-server-express-api.ts)
+    You can see a full example of this [here](./examples/apollo-server-express/)
 
 2.
     In your GraphQL Resolvers, wrap all usages of `pubsub` with `WebSocketOverHttpPubsubMixin(context)(pubsub)`.
@@ -125,9 +125,10 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
       // later, do `ApolloServer(/*...*/).applyMiddleware({ app })
       ```
 
-      You can see a full example of this [here](./src/examples/apollo-server-express-api.ts)
+      You can see a full example of this [here](./examples/apollo-server-express/)
 
-    * Other web frameworks
+    * 
+      Other web frameworks
 
       Not everyone uses express. That's fine. We still want to work with your project. Many node.js web frameworks ultimately end up using the `http` module from the standard library behind the scenes. If your web framework gives you a reference to an underlying `http.Server` instance, you can use `GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller` to install WebSocket-Over-HTTP handling to it.
 
@@ -151,6 +152,9 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
       })(httpServer);
 
       ```
+
+      Take a look at [the micro example](./examples/micro) for a working example of this with an http.Server created from [micro](https://github.com/zeit/micro) and [apollo-server-micro](https://github.com/apollographql/apollo-server/tree/master/packages/apollo-server-micro).
+
     * Have a question about this part? File an issue and we can help out and add to the docs.
 
 Those are the steps for using fanout-graphql-tools. See [apollo-demo](https://github.com/fanout/apollo-demo) for a fully functional app, running in AWS Lambda and storing data in DynamoDB.

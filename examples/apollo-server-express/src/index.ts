@@ -1,16 +1,11 @@
-/**
- * API from https://www.apollographql.com/docs/apollo-server/features/subscriptions#middleware
- */
 import { ApolloServer, makeExecutableSchema } from "apollo-server-express";
 import * as express from "express";
+import { IStoredConnection, IStoredPubSubSubscription } from "fanout-graphql-tools";
+import { GraphqlWsOverWebSocketOverHttpExpressMiddleware } from "fanout-graphql-tools";
+import { MapSimpleTable } from "fanout-graphql-tools";
+import { WebSocketOverHttpContextFunction } from "fanout-graphql-tools";
 import * as http from "http";
-import { SimpleGraphqlApi } from "../simple-graphql-api/SimpleGraphqlApi";
-
-// These should be mportable `from "fanout-graphql-tools"`
-import { IStoredConnection, IStoredPubSubSubscription } from "..";
-import { GraphqlWsOverWebSocketOverHttpExpressMiddleware } from "..";
-import { MapSimpleTable } from "..";
-import { WebSocketOverHttpContextFunction } from "..";
+import { SimpleGraphqlApi } from "../../../src/simple-graphql-api/SimpleGraphqlApi";
 
 /**
  * WebSocket-Over-HTTP Support requires storage to keep track of ws-over-http connections and subscriptions.
@@ -18,6 +13,7 @@ import { WebSocketOverHttpContextFunction } from "..";
  */
 const connectionStorage = MapSimpleTable<IStoredConnection>();
 const pubSubSubscriptionStorage = MapSimpleTable<IStoredPubSubSubscription>();
+
 const { typeDefs, resolvers } = SimpleGraphqlApi();
 const schema = makeExecutableSchema({ typeDefs, resolvers });
 const apolloServer = new ApolloServer({
@@ -31,7 +27,7 @@ const apolloServer = new ApolloServer({
   schema,
 });
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 57410;
 const app = express().use(
   // This is what you need to support WebSocket-Over-Http Subscribes
   GraphqlWsOverWebSocketOverHttpExpressMiddleware({

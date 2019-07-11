@@ -1,5 +1,5 @@
 {
-  "name": "fanout-graphql-tools-example-micro",
+  "name": "fanout-graphql-tools-example-apollo-server-express",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -21,9 +21,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/micro": "^7.3.3",
-    "apollo-server-micro": "^2.6.9",
-    "micro": "^9.3.4"
   },
   "devDependencies": {
     "ts-node": "^8.3.0"

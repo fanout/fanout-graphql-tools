@@ -4,10 +4,7 @@
 import { ApolloServer, makeExecutableSchema } from "apollo-server-express";
 import * as express from "express";
 import * as http from "http";
-import {
-  SimpleGraphqlApi,
-  SimpleGraphqlApiGripChannelNamer,
-} from "../simple-graphql-api/SimpleGraphqlApi";
+import { SimpleGraphqlApi } from "../simple-graphql-api/SimpleGraphqlApi";
 
 // These should be mportable `from "fanout-graphql-tools"`
 import { IStoredConnection, IStoredPubSubSubscription } from "..";
@@ -39,7 +36,6 @@ const app = express().use(
   // This is what you need to support WebSocket-Over-Http Subscribes
   GraphqlWsOverWebSocketOverHttpExpressMiddleware({
     connectionStorage,
-    getGripChannel: SimpleGraphqlApiGripChannelNamer(),
     pubSubSubscriptionStorage,
     schema,
   }),

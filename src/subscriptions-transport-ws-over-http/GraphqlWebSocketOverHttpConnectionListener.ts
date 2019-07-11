@@ -114,10 +114,8 @@ export interface IGraphqlWebSocketOverHttpConnectionListenerOptions {
    * Given a subscription operation, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates
    */
   getGripChannels(
-    subscriptionOperation:
-      | IGraphqlWsStartMessage
-      | IGraphqlWsStopMessage
-      | IGetGripChannelByConnectionSelector,
+    connection: IWebSocketOverHTTPConnectionInfo,
+    subscriptionOperation?: IGraphqlWsStartMessage | IGraphqlWsStopMessage,
   ): Promise<string[]>;
   /** Cleanup after a connection has closed/disconnected, e.g. delete all stored subscriptions created by the connection */
   cleanupConnection(
@@ -139,9 +137,9 @@ export default (
   const endConnection = async (
     connection: IWebSocketOverHTTPConnectionInfo,
   ): Promise<void> => {
-    const gripChannelsForConnection = await options.getGripChannels({
-      connection: { id: options.connection.id },
-    });
+    const gripChannelsForConnection = await options.getGripChannels(
+      options.connection,
+    );
     for (const gripChannel of gripChannelsForConnection) {
       console.debug(
         `GraphqlWebSocketOverHttpConnectionListener unsubscribing from grip-channel ${gripChannel}`,
@@ -163,6 +161,7 @@ export default (
       const graphqlWsEvent = JSON.parse(message);
       if (isGraphqlWsStartMessage(graphqlWsEvent)) {
         for (const gripChannel of await options.getGripChannels(
+          options.connection,
           graphqlWsEvent,
         )) {
           console.debug(
@@ -172,6 +171,7 @@ export default (
         }
       } else if (isGraphqlWsStopMessage(graphqlWsEvent)) {
         for (const gripChannel of await options.getGripChannels(
+          options.connection,
           graphqlWsEvent,
         )) {
           console.debug(

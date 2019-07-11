@@ -108,7 +108,6 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
       ```typescript
       import * as express from "express"
       import { GraphqlWsOverWebSocketOverHttpExpressMiddleware } from "fanout-graphql-tools"
-      import { gripChannelForSubscriptionWithoutArguments } from "fanout-graphql-tools"
       import { makeExecutableSchema } from "graphql-tools";
       import MyGraphqlApi from "./my-graphql-api"
 
@@ -121,8 +120,6 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
           connectionStorage,
           pubSubSubscriptionStorage,
           schema,
-          // Later you might customize this, but this is a good default to start with
-          getGripChannel: gripChannelForSubscriptionWithoutArguments,
         }))
       
       // later, do `ApolloServer(/*...*/).applyMiddleware({ app })
@@ -137,7 +134,6 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
       ```typescript
       import * as http from "http"
       import { GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller } from "fanout-graphql-tools"
-      import { gripChannelForSubscriptionWithoutArguments } from "fanout-graphql-tools"
       import { makeExecutableSchema } from "graphql-tools";
       import MyGraphqlApi from "./my-graphql-api"
 
@@ -152,8 +148,6 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
         connectionStorage,
         pubSubSubscriptionStorage,
         schema,
-        // Later you might customize this, but this is a good default to start with
-        getGripChannel: gripChannelForSubscriptionWithoutArguments,
       })(httpServer);
 
       ```

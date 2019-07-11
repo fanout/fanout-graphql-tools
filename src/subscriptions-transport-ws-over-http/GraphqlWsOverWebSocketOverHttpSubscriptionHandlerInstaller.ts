@@ -3,6 +3,7 @@ import { GraphQLSchema } from "graphql";
 import * as http from "http";
 import { ISimpleTable } from "../simple-table/SimpleTable";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
+import { GraphqlWsGripChannelNamer } from "./GraphqlWsGripChannelNamers";
 import GraphqlWsOverWebSocketOverHttpExpressMiddleware, {
   IStoredConnection,
 } from "./GraphqlWsOverWebSocketOverHttpExpressMiddleware";
@@ -16,7 +17,7 @@ interface IGraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstallerOptions {
   /** GraphQL Schema including resolvers */
   schema: GraphQLSchema;
   /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-  getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
+  getGripChannel?: GraphqlWsGripChannelNamer;
 }
 
 /**

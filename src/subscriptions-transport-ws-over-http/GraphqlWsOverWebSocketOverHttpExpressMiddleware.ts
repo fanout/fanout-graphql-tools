@@ -19,6 +19,10 @@ import GraphqlWebSocketOverHttpConnectionListener, {
   isGraphqlWsStopMessage,
   parseGraphqlWsStartMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
+import {
+  DefaultGripChannelNamer,
+  GraphqlWsGripChannelNamer,
+} from "./GraphqlWsGripChannelNamers";
 import { cleanupStorageAfterConnection } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 import { IWebSocketOverHttpGraphqlSubscriptionContext } from "./WebSocketOverHttpGraphqlContext";
@@ -299,7 +303,7 @@ interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
     keepAliveIntervalSeconds?: number;
   };
   /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-  getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
+  getGripChannel?: GraphqlWsGripChannelNamer;
   /** Called when a new subscrpition connection is made */
   onSubscriptionStart?(...args: any[]): any;
   /** Called when a subscription is stopped */
@@ -314,6 +318,8 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
 ): express.RequestHandler => {
   const { connectionStorage } = options;
   const { keepAliveIntervalSeconds = 120 } = options.webSocketOverHttp || {};
+  const getGripChannelForStartMessage =
+    options.getGripChannel || DefaultGripChannelNamer();
   return WebSocketOverHttpExpress({
     getConnectionListener(connection) {
       /** This connectionListener will respond to graphql-ws messages in a way that accepts all incoming subscriptions */
@@ -331,19 +337,23 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
             keepAliveIntervalSeconds,
             ...options.webSocketOverHttp,
           },
-          async getGripChannels(channelSelector): Promise<string[]> {
-            const startMessages: IGraphqlWsStartMessage[] = await (async (): Promise<
-              IGraphqlWsStartMessage[]
+          async getGripChannels(
+            { id: connectionId },
+            channelSelector,
+          ): Promise<string[]> {
+            const relevantSubscriptions = await (async (): Promise<
+              Array<{
+                /** connection ID */
+                connectionId: string;
+                /** grpahql-ws START message for the GraphQL Subscription. This includes the graphql query, operationId, variables */
+                graphqlWsStartMessage: IGraphqlWsStartMessage;
+              }>
             > => {
-              if (isGraphqlWsStartMessage(channelSelector)) {
-                return [channelSelector];
-              }
-              if ("connection" in channelSelector) {
+              if (!channelSelector) {
                 // look up by connectionId
                 const subscriptionsForConnection = await filterTable(
                   options.pubSubSubscriptionStorage,
-                  subscription =>
-                    subscription.connectionId === channelSelector.connection.id,
+                  subscription => subscription.connectionId === connectionId,
                 );
                 return await Promise.all(
                   subscriptionsForConnection.map(s => {
@@ -351,6 +361,14 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
                     return startMessage;
                   }),
                 );
+              }
+              if (isGraphqlWsStartMessage(channelSelector)) {
+                return [
+                  {
+                    connectionId,
+                    graphqlWsStartMessage: channelSelector,
+                  },
+                ];
               }
               if (isGraphqlWsStopMessage(channelSelector)) {
                 const stopMessage: IGraphqlWsStopMessage = channelSelector;
@@ -366,10 +384,10 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
                 );
                 return await Promise.all(
                   storedSubscriptionsForStopMessage.map(s => {
-                    const startMessage = parseGraphqlWsStartMessage(
+                    const graphqlWsStartMessage = parseGraphqlWsStartMessage(
                       s.graphqlWsStartMessage,
                     );
-                    return startMessage;
+                    return { graphqlWsStartMessage, connectionId };
                   }),
                 );
               }
@@ -378,7 +396,9 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
                 `Failed to retrieve gripChannels for channelSelector ${channelSelector}`,
               );
             })();
-            const gripChannels = startMessages.map(options.getGripChannel);
+            const gripChannels = relevantSubscriptions.map(
+              getGripChannelForStartMessage,
+            );
             return gripChannels;
           },
         },

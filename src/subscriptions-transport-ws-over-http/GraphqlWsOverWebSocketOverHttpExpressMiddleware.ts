@@ -19,6 +19,7 @@ import GraphqlWebSocketOverHttpConnectionListener, {
   isGraphqlWsStopMessage,
   parseGraphqlWsStartMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
+import { gripChannelForSubscriptionWithoutArguments } from "./GraphqlWsGripChannelNamers";
 import { cleanupStorageAfterConnection } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 import { IWebSocketOverHttpGraphqlSubscriptionContext } from "./WebSocketOverHttpGraphqlContext";
@@ -299,7 +300,7 @@ interface IGraphqlWsOverWebSocketOverHttpExpressMiddlewareOptions {
     keepAliveIntervalSeconds?: number;
   };
   /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-  getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
+  getGripChannel?(gqlStartMessage: IGraphqlWsStartMessage): string;
   /** Called when a new subscrpition connection is made */
   onSubscriptionStart?(...args: any[]): any;
   /** Called when a subscription is stopped */
@@ -314,6 +315,8 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
 ): express.RequestHandler => {
   const { connectionStorage } = options;
   const { keepAliveIntervalSeconds = 120 } = options.webSocketOverHttp || {};
+  const getGripChannelForStartMessage =
+    options.getGripChannel || gripChannelForSubscriptionWithoutArguments;
   return WebSocketOverHttpExpress({
     getConnectionListener(connection) {
       /** This connectionListener will respond to graphql-ws messages in a way that accepts all incoming subscriptions */
@@ -378,7 +381,9 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
                 `Failed to retrieve gripChannels for channelSelector ${channelSelector}`,
               );
             })();
-            const gripChannels = startMessages.map(options.getGripChannel);
+            const gripChannels = startMessages.map(
+              getGripChannelForStartMessage,
+            );
             return gripChannels;
           },
         },

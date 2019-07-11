@@ -88,8 +88,8 @@ export const WebSocketOverHttpContextFunction = (options: {
       },
       publish: EpcpSubscriptionPublisher({
         grip: {
-          getGripChannel,
           ...options.grip,
+          getGripChannel,
         },
       }),
     },

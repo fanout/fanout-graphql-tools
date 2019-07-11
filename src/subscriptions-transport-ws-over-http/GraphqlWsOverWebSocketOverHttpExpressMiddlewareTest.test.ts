@@ -62,9 +62,9 @@ interface IGraphqlHttpAppOptions {
   /** Object that will be called base on subscription connect/disconnect */
   subscriptionListener?: ISubscriptionsListener;
   /** configure WebSocket-Over-Http */
-  webSocketOverHttp: {
+  webSocketOverHttp?: {
     /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
-    getGripChannel(gqlStartMessage: IGraphqlWsStartMessage): string;
+    getGripChannel?(gqlStartMessage: IGraphqlWsStartMessage): string;
   };
 }
 
@@ -79,7 +79,8 @@ const WsOverHttpGraphqlHttpApp = (options: IGraphqlHttpAppOptions) => {
   const expressApplication = express().use(
     GraphqlWsOverWebSocketOverHttpExpressMiddleware({
       connectionStorage: options.connectionStorage,
-      getGripChannel: options.webSocketOverHttp.getGripChannel,
+      getGripChannel:
+        options.webSocketOverHttp && options.webSocketOverHttp.getGripChannel,
       onSubscriptionStart:
         subscriptionListener && subscriptionListener.onConnect,
       pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
@@ -91,7 +92,8 @@ const WsOverHttpGraphqlHttpApp = (options: IGraphqlHttpAppOptions) => {
   const apolloServer = new ApolloServer({
     context: WebSocketOverHttpContextFunction({
       grip: {
-        getGripChannel: options.webSocketOverHttp.getGripChannel,
+        getGripChannel:
+          options.webSocketOverHttp && options.webSocketOverHttp.getGripChannel,
         url: process.env.GRIP_URL || "http://localhost:5561",
       },
       pubSubSubscriptionStorage: options.pubSubSubscriptionStorage,
@@ -145,9 +147,6 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       },
       pubSubSubscriptionStorage,
       subscriptionListener: { onConnect: onSubscriptionConnection },
-      webSocketOverHttp: {
-        getGripChannel: SimpleGraphqlApiGripChannelNamer(),
-      },
     });
     await withListeningServer(app.httpServer, 0)(async ({ url }) => {
       const urls = {
@@ -206,9 +205,6 @@ export class GraphqlWsOverWebSocketOverHttpExpressMiddlewareTest {
       },
       pubSubSubscriptionStorage,
       subscriptionListener: { onConnect: onSubscriptionConnection },
-      webSocketOverHttp: {
-        getGripChannel: SimpleGraphqlApiGripChannelNamer(),
-      },
     });
     await withListeningServer(app.httpServer, serverPort)(async ({ url }) => {
       const urls = {

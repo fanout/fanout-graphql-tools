@@ -64,7 +64,7 @@ export const UniqueGripChannelNameSubscriptionFilterer = (options: {
 }) => {
   async function* filterSubscriptionsForUniqueGripChannel(
     subscriptions: AsyncIterable<IStoredPubSubSubscription>,
-  ): AsyncIterableIterator<IStoredPubSubSubscription> {
+  ): AsyncIterable<IStoredPubSubSubscription> {
     const seenGripChannels = new Set<string>();
     for await (const s of subscriptions) {
       const gripChannel = options.getGripChannel({
@@ -80,4 +80,39 @@ export const UniqueGripChannelNameSubscriptionFilterer = (options: {
     }
   }
   return filterSubscriptionsForUniqueGripChannel;
+};
+
+/** Create async filterer of IStoredSubscriptions that  */
+export const UniqueConnectionIdOperationIdPairSubscriptionFilterer = () => {
+  async function* filterSubscriptions(
+    subscriptions: AsyncIterable<IStoredPubSubSubscription>,
+  ): AsyncIterable<IStoredPubSubSubscription> {
+    const seenConnectionOperationPairIds = new Set();
+    for await (const s of subscriptions) {
+      const connectionIdOperationIdPair = [
+        s.connectionId,
+        parseGraphqlWsStartMessage(s.graphqlWsStartMessage).id,
+      ];
+      const connectionOperationPairId = JSON.stringify(
+        connectionIdOperationIdPair,
+      );
+      if (!seenConnectionOperationPairIds.has(connectionOperationPairId)) {
+        yield s;
+      }
+      seenConnectionOperationPairIds.add(seenConnectionOperationPairIds);
+    }
+  }
+  return filterSubscriptions;
+};
+
+type IAsyncFilter<T> = (items: AsyncIterable<T>) => AsyncIterable<T>;
+
+/** Generic IAsyncFilter that doesn't actually filter anything */
+export const NoopAsyncFilterer = <T>(): IAsyncFilter<T> => {
+  async function* filter(items: AsyncIterable<T>) {
+    for await (const item of items) {
+      yield item;
+    }
+  }
+  return filter;
 };

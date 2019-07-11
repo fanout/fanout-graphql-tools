@@ -2,7 +2,8 @@ import { GraphQLSchema } from "graphql";
 import { ISimpleTable } from "../simple-table/SimpleTable";
 import {
   EpcpSubscriptionPublisher,
-  UniqueGripChannelNameSubscriptionFilterer,
+  UniqueConnectionIdOperationIdPairSubscriptionFilterer,
+  NoopAsyncFilterer,
 } from "./EpcpSubscriptionPublisher";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
 import {
@@ -59,6 +60,16 @@ export interface IWebSocketOverHttpGraphqlSubscriptionContext {
   };
 }
 
+type IAsyncFilter<T> = (items: AsyncIterable<T>) => AsyncIterable<T>;
+interface IGraphqlWsGripChannelSharingStrategy {
+  /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
+  getGripChannel: GraphqlWsGripChannelNamer;
+  /** given a PubSubEngine.publish from a mutation, return an AsyncFilterer that decides which relevant subscriptions can be deemed identical for the sake of simulating the resolvers and publishing results via EPCP */
+  getSubscriptionFilterForPublish(
+    publish: IPubSubEnginePublish,
+  ): IAsyncFilter<IStoredPubSubSubscription>;
+}
+
 /** ContextFunction that can be passed to ApolloServerOptions["context"] that will provide required context for WebSocket-Over-HTTP PubSub mixin */
 export const WebSocketOverHttpContextFunction = (options: {
   /** graphql schema */
@@ -71,17 +82,31 @@ export const WebSocketOverHttpContextFunction = (options: {
     url: string;
     /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
     getGripChannel?: GraphqlWsGripChannelNamer;
+    /** strategy for sharing grip channels */
+    getSubscriptionFilterForPublish?(
+      publish: IPubSubEnginePublish,
+    ): IAsyncFilter<IStoredPubSubSubscription>;
   };
 }) => {
-  const getGripChannel =
-    options.grip.getGripChannel || DefaultGripChannelNamer();
+  const channelSharingStrategy: IGraphqlWsGripChannelSharingStrategy = {
+    getGripChannel: options.grip.getGripChannel || DefaultGripChannelNamer(),
+    getSubscriptionFilterForPublish: (
+      publish: IPubSubEnginePublish,
+    ): IAsyncFilter<IStoredPubSubSubscription> =>
+      options.grip && options.grip.getSubscriptionFilterForPublish
+        ? options.grip.getSubscriptionFilterForPublish(publish)
+        : NoopAsyncFilterer(),
+  };
   const context: IContextForPublishingWithEpcp = {
     epcpPublishing: {
       getPubSubSubscriptionsForPublish(publish) {
         const storedSubscriptions = PubSubSubscriptionsForPublishFromStorageGetter(
           options.pubSubSubscriptionStorage,
         )(publish);
-        return storedSubscriptions;
+        const filtered = channelSharingStrategy.getSubscriptionFilterForPublish(
+          publish,
+        )(storedSubscriptions);
+        return filtered;
       },
       graphql: {
         schema: options.schema,
@@ -89,7 +114,7 @@ export const WebSocketOverHttpContextFunction = (options: {
       publish: EpcpSubscriptionPublisher({
         grip: {
           ...options.grip,
-          getGripChannel,
+          getGripChannel: channelSharingStrategy.getGripChannel,
         },
       }),
     },

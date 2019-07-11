@@ -1,6 +1,8 @@
 # fanout-graphql-tools-example-micro
 
-Example of how to use fanout-graphql-tools with apollo-server-micro and micro.
+Example of how to use fanout-graphql-tools with apollo-server-micro and micro. This also serves as an example of how to use fanout-graphql-tools with any web framework that returns an `http.Server`.
+
+fanout-graphql-tools exports a `GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller` constructor that can mutate any `http.Server` to add support for handling WebSocket-Over-HTTP requests.
 
 ## Testing locally
 

@@ -1,6 +1,10 @@
-# fanout-graphql-tools-example-apollo-server-express
+# fanout-graphql-tools-example-http-request-listener-api
 
-Example of how to use fanout-graphql-tools with apollo-server-express and express.
+Example of how to use fanout-graphql-tools with an http.RequestListener (in this case, from micro).
+
+Some node.js web libraries help you build an http.RequestListener function that can be passed to `require('http').createServer(requestListener)` to create an http.Server.
+
+fanout-graphql-tools exports a `GraphqlWsOverWebSocketOverHttpRequestListener` constructor that wraps another RequestListener, adding support for WebSocket-Over-HTTP in the returned, new, RequestListener.
 
 ## Testing locally
 

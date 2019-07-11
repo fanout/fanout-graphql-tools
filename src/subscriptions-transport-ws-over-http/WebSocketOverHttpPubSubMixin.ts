@@ -37,8 +37,14 @@ export const WebSocketOverHttpPubSubMixin = (
       pubsub,
     );
   }
-  if (Object.keys(context).filter(contextKey => Object.keys(FanoutGraphqlToolsContextKeys).includes(contextKey)).length === 0) {
-    console.warn("WebSocketOverHttpPubSubMixin found no FanoutGraphqlToolsContextKeys in GraphQL Context. Did you remember to use WebSocketOverHttpContextFunction when constructing ApolloServer()?")
+  if (
+    Object.keys(context).filter(contextKey =>
+      Object.keys(FanoutGraphqlToolsContextKeys).includes(contextKey),
+    ).length === 0
+  ) {
+    console.warn(
+      "WebSocketOverHttpPubSubMixin found no FanoutGraphqlToolsContextKeys in GraphQL Context. Did you remember to use WebSocketOverHttpContextFunction when constructing ApolloServer()?",
+    );
   }
   return pubsub;
 };

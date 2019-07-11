@@ -6,14 +6,14 @@
 
 import { ApolloServer, makeExecutableSchema } from "apollo-server-micro";
 import {
-  GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller,
+  GraphqlWsOverWebSocketOverHttpRequestListener,
   IStoredConnection,
   IStoredPubSubSubscription,
   WebSocketOverHttpContextFunction,
 } from "fanout-graphql-tools";
 import { MapSimpleTable } from "fanout-graphql-tools";
 import * as http from "http";
-import micro from "micro";
+import { run as microRun } from "micro";
 import { SimpleGraphqlApi } from "../../../src/simple-graphql-api/SimpleGraphqlApi";
 
 /**
@@ -38,16 +38,21 @@ const apolloServer = new ApolloServer({
   schema,
 });
 
-// Note: In micro 9.3.5 this will return an http.RequestListener instead (after https://github.com/zeit/micro/pull/399)
-// Provide it to http.createServer to create an http.Server
-const httpServer: http.Server = micro(apolloServer.createHandler());
+// In micro 9.3.5, the default export of micro(handler) will return an http.RequestListener (after https://github.com/zeit/micro/pull/399).
+// As of this authoring, only 9.3.4 is out, which returns an http.Server. So we manually build the RequestListner here.
+// After 9.3.5, the following will work:
+// import micro from "micro"
+// const microRequestListener = micro(apolloServer.createHandler())
+const microRequestListener: http.RequestListener = (req, res) =>
+  microRun(req, res, apolloServer.createHandler());
 
-// Patch the http.Server to handle WebSocket-Over-Http requests that come from Fanout Cloud
-GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller({
-  connectionStorage,
-  pubSubSubscriptionStorage,
-  schema,
-})(httpServer);
+const httpServer = http.createServer(
+  GraphqlWsOverWebSocketOverHttpRequestListener(microRequestListener, {
+    connectionStorage,
+    pubSubSubscriptionStorage,
+    schema,
+  }),
+);
 
 const port = process.env.PORT || 57410;
 httpServer.listen(port, () => {

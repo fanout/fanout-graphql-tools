@@ -53,7 +53,7 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
     })
     ```
 
-    You can see a full example of this [here](./src/examples/apollo-server-express-api.ts)
+    You can see a full example of this [here](./examples/apollo-server-express/)
 
 2.
     In your GraphQL Resolvers, wrap all usages of `pubsub` with `WebSocketOverHttpPubsubMixin(context)(pubsub)`.
@@ -125,7 +125,7 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
       // later, do `ApolloServer(/*...*/).applyMiddleware({ app })
       ```
 
-      You can see a full example of this [here](./src/examples/apollo-server-express-api.ts)
+      You can see a full example of this [here](./examples/apollo-server-express/)
 
     * 
       Other web frameworks

@@ -2,8 +2,9 @@ import { GraphQLSchema } from "graphql";
 import { ISimpleTable } from "../simple-table/SimpleTable";
 import {
   EpcpSubscriptionPublisher,
-  UniqueConnectionIdOperationIdPairSubscriptionFilterer,
+  IAsyncFilter,
   NoopAsyncFilterer,
+  UniqueConnectionIdOperationIdPairSubscriptionFilterer,
 } from "./EpcpSubscriptionPublisher";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
 import {
@@ -60,7 +61,6 @@ export interface IWebSocketOverHttpGraphqlSubscriptionContext {
   };
 }
 
-type IAsyncFilter<T> = (items: AsyncIterable<T>) => AsyncIterable<T>;
 interface IGraphqlWsGripChannelSharingStrategy {
   /** Given a graphql-ws GQL_START message, return a string that is the Grip-Channel that the GRIP server should subscribe to for updates */
   getGripChannel: GraphqlWsGripChannelNamer;

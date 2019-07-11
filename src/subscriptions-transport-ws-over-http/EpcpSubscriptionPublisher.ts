@@ -105,7 +105,7 @@ export const UniqueConnectionIdOperationIdPairSubscriptionFilterer = () => {
   return filterSubscriptions;
 };
 
-type IAsyncFilter<T> = (items: AsyncIterable<T>) => AsyncIterable<T>;
+export type IAsyncFilter<T> = (items: AsyncIterable<T>) => AsyncIterable<T>;
 
 /** Generic IAsyncFilter that doesn't actually filter anything */
 export const NoopAsyncFilterer = <T>(): IAsyncFilter<T> => {

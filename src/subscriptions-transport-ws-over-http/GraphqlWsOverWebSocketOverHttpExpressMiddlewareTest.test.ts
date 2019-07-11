@@ -21,7 +21,6 @@ import * as http from "http";
 import * as urlModule from "url";
 import {
   SimpleGraphqlApi,
-  SimpleGraphqlApiGripChannelNamer,
   SimpleGraphqlApiMutations,
   SimpleGraphqlApiSubscriptions,
 } from "../simple-graphql-api/SimpleGraphqlApi";

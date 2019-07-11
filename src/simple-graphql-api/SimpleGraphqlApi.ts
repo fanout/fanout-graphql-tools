@@ -1,7 +1,5 @@
 import { PubSub, PubSubEngine } from "apollo-server";
 import gql from "graphql-tag";
-import { IGraphqlWsStartMessage } from "../subscriptions-transport-ws-over-http/GraphqlWebSocketOverHttpConnectionListener";
-import { gripChannelForSubscriptionWithoutArguments } from "../subscriptions-transport-ws-over-http/GraphqlWsGripChannelNamers";
 import { IWebSocketOverHttpGraphqlSubscriptionContext } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpGraphqlContext";
 import { IContextForPublishingWithEpcp } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpGraphqlContext";
 import { WebSocketOverHttpPubSubMixin } from "../subscriptions-transport-ws-over-http/WebSocketOverHttpPubSubMixin";
@@ -146,11 +144,4 @@ export const SimpleGraphqlApi = ({
     resolvers,
     typeDefs,
   };
-};
-
-/** Return a function that will return the Grip-Channel to use for each graphql-ws start message */
-export const SimpleGraphqlApiGripChannelNamer = () => (
-  gqlWsStartMessage: IGraphqlWsStartMessage,
-): string => {
-  return gripChannelForSubscriptionWithoutArguments(gqlWsStartMessage);
 };

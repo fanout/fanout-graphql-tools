@@ -19,7 +19,7 @@ import GraphqlWebSocketOverHttpConnectionListener, {
   isGraphqlWsStopMessage,
   parseGraphqlWsStartMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
-import { gripChannelForSubscriptionWithoutArguments } from "./GraphqlWsGripChannelNamers";
+import { DefaultGripChannelNamer } from "./GraphqlWsGripChannelNamers";
 import { cleanupStorageAfterConnection } from "./GraphqlWsOverWebSocketOverHttpStorageCleaner";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 import { IWebSocketOverHttpGraphqlSubscriptionContext } from "./WebSocketOverHttpGraphqlContext";
@@ -316,7 +316,7 @@ export const GraphqlWsOverWebSocketOverHttpExpressMiddleware = (
   const { connectionStorage } = options;
   const { keepAliveIntervalSeconds = 120 } = options.webSocketOverHttp || {};
   const getGripChannelForStartMessage =
-    options.getGripChannel || gripChannelForSubscriptionWithoutArguments;
+    options.getGripChannel || DefaultGripChannelNamer();
   return WebSocketOverHttpExpress({
     getConnectionListener(connection) {
       /** This connectionListener will respond to graphql-ws messages in a way that accepts all incoming subscriptions */

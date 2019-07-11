@@ -5,7 +5,7 @@ import {
   UniqueGripChannelNameSubscriptionFilterer,
 } from "./EpcpSubscriptionPublisher";
 import { IGraphqlWsStartMessage } from "./GraphqlWebSocketOverHttpConnectionListener";
-import { gripChannelForSubscriptionWithoutArguments } from "./GraphqlWsGripChannelNamers";
+import { DefaultGripChannelNamer } from "./GraphqlWsGripChannelNamers";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
 import {
   IPubSubEnginePublish,
@@ -71,7 +71,7 @@ export const WebSocketOverHttpContextFunction = (options: {
   };
 }) => {
   const getGripChannel =
-    options.grip.getGripChannel || gripChannelForSubscriptionWithoutArguments;
+    options.grip.getGripChannel || DefaultGripChannelNamer();
   const context: IContextForPublishingWithEpcp = {
     epcpPublishing: {
       getPubSubSubscriptionsForPublish(publish) {

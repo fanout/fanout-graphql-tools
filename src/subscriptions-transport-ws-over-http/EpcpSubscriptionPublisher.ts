@@ -1,13 +1,11 @@
 import * as grip from "grip";
 import * as pubcontrol from "pubcontrol";
-import { SimpleGraphqlApiGripChannelNamer } from "../simple-graphql-api/SimpleGraphqlApi";
 import {
   IGraphqlWsStartMessage,
   isGraphqlWsStartMessage,
   parseGraphqlWsStartMessage,
 } from "./GraphqlWebSocketOverHttpConnectionListener";
 import { IStoredPubSubSubscription } from "./PubSubSubscriptionStorage";
-import { IPubSubEnginePublish } from "./SubscriptionStoragePubSubMixin";
 
 export type ISubscriptionPublisher = (
   subscription: IStoredPubSubSubscription,

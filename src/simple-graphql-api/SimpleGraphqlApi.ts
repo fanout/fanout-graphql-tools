@@ -133,7 +133,7 @@ export const SimpleGraphqlApi = ({
         subscribe(
           rootValue: any,
           args: object,
-          context: IWebSocketOverHttpGraphqlSubscriptionContext,
+          context: any | IWebSocketOverHttpGraphqlSubscriptionContext,
         ) {
           return WebSocketOverHttpPubSubMixin(context)(pubsub).asyncIterator([
             SimpleGraphqlApiPubSubTopic.POST_ADDED,

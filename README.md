@@ -53,6 +53,8 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
     })
     ```
 
+    You can see a full example of this [here](./src/examples/apollo-server-express-api.ts)
+
 2.
     In your GraphQL Resolvers, wrap all usages of `pubsub` with `WebSocketOverHttpPubsubMixin(context)(pubsub)`.
     
@@ -96,6 +98,8 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
       };
       ```
 
+      You can see a full example of this in [SimpleGraphqlApi](./src/simple-graphql-api/SimpleGraphqlApi.ts)
+
 3. Add WebSocket-Over-HTTP handling to the http server that serves your GraphQL App. The way to do this depends on how you make an HTTP Server.
     * apollo-server-express
 
@@ -123,6 +127,9 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
       
       // later, do `ApolloServer(/*...*/).applyMiddleware({ app })
       ```
+
+      You can see a full example of this [here](./src/examples/apollo-server-express-api.ts)
+
     * Other web frameworks
 
       Not everyone uses express. That's fine. We still want to work with your project. Many node.js web frameworks ultimately end up using the `http` module from the standard library behind the scenes. If your web framework gives you a reference to an underlying `http.Server` instance, you can use `GraphqlWsOverWebSocketOverHttpSubscriptionHandlerInstaller` to install WebSocket-Over-HTTP handling to it.

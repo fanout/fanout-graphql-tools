@@ -2,7 +2,7 @@
 
 Modules that help make GraphQL servers that work with [Fanout Cloud](https://fanout.io/cloud/).
 
-See [fanout/apollo-demo](https://github.com/fanout/apollo-demo) for an example project that uses this to power a GraphQL API server with GraphQL Subscriptions on AWS Lambda.
+See [fanout/apollo-serverless-demo](https://github.com/fanout/apollo-serverless-demo) for an example project that uses this to power a GraphQL API server with GraphQL Subscriptions on AWS Lambda.
 
 Fanout Cloud can act as a reverse proxy between your users' web browsers and your GraphQL API, holding open long-running WebSocket connections so your server (or function-as-a-service) doesn't have to. Instead, Fanout Cloud makes simple regular HTTP Requests to your application using the [WebSocket-Over-HTTP Protocol](https://pushpin.org/docs/protocols/websocket-over-http/). The tools in this library allow your GraphQL API server to serve the GraphQL Subscriptions protocol ([`graphql-ws`](https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md)) over WebSocket-Over-HTTP.
 
@@ -157,7 +157,7 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
 
     * Have a question about this part? File an issue and we can help out and add to the docs.
 
-Those are the steps for using fanout-graphql-tools. See [apollo-demo](https://github.com/fanout/apollo-demo) for a fully functional app, running in AWS Lambda and storing data in DynamoDB.
+Those are the steps for using fanout-graphql-tools. See [apollo-serverless-demo](https://github.com/fanout/apollo-serverless-demo) for a fully functional app, running in AWS Lambda and storing data in DynamoDB.
 
 ## Development
 

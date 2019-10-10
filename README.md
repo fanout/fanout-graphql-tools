@@ -56,7 +56,7 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
     You can see a full example of this [here](./examples/apollo-server-express/)
 
 2.
-    In your GraphQL Resolvers, wrap all usages of `pubsub` with `WebSocketOverHttpPubsubMixin(context)(pubsub)`.
+    In your GraphQL Resolvers, wrap all usages of `pubsub` with `WebSocketOverHttpPubSubMixin(context)(pubsub)`.
     
     Every `ApolloServer` has to be created with some [GraphQL Resolvers](https://www.apollographql.com/docs/graphql-tools/resolvers/). To power GraphQL Subscriptions, these resolvers make use of a [`PubSubEngine`](https://www.apollographql.com/docs/apollo-server/features/subscriptions/#subscriptions-example). In mutation resolvers, you call `pubsub.publish(triggerName, payload)`. In your subscription resolvers, you call `pubsub.asyncIterator(triggerName)`.
 
@@ -79,19 +79,19 @@ Let's say you already have a project that uses apollo-server to make a GraphQL A
         },
       };
       ```
-    * After wrapping pubsubs with `WebSocketOverHttpPubsubMixin(context)(pubsub)`
+    * After wrapping pubsubs with `WebSocketOverHttpPubSubMixin(context)(pubsub)`
       ```typescript
-      import { WebSocketOverHttpPubsubMixin } from "fanout-graphql-tools"
+      import { WebSocketOverHttpPubSubMixin } from "fanout-graphql-tools"
       const resolvers = {
         Subscription: {
           postAdded: {
             // Additional event labels can be passed to asyncIterator creation
-            subscribe: (source, args, context) => WebSocketOverHttpPubsubMixin(context)(pubsub).asyncIterator([POST_ADDED]),
+            subscribe: (source, args, context) => WebSocketOverHttpPubSubMixin(context)(pubsub).asyncIterator([POST_ADDED]),
           },
         },
         Mutation: {
           addPost(root: any, args: any, context: any) {
-            WebSocketOverHttpPubsubMixin(context)(pubsub).publish(POST_ADDED, { postAdded: args });
+            WebSocketOverHttpPubSubMixin(context)(pubsub).publish(POST_ADDED, { postAdded: args });
             return postController.addPost(args);
           },
         },

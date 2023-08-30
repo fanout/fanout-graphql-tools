@@ -21,7 +21,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "apollo-server-micro": "^2.6.9",
+    "apollo-server-micro": "^2.26.2",
     "micro": "^9.3.4"
   },
   "devDependencies": {
